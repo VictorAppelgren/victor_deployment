@@ -1,0 +1,28 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    bash \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application code
+COPY saga-graph /app/saga-graph
+COPY application-be /app/application-be
+COPY deployment/start-apis.sh /app/deployment/start-apis.sh
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /app/application-be/requirements.txt && \
+    pip install --no-cache-dir -r /app/saga-graph/requirements.txt
+
+# Make start script executable
+RUN chmod +x /app/deployment/start-apis.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["bash", "/app/deployment/start-apis.sh"]

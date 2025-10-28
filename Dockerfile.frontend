@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install pnpm globally
+RUN npm install -g pnpm
+
+# Copy application code
+COPY application-fe /app
+
+# Install dependencies (set CI=true to avoid TTY issues)
+ENV CI=true
+RUN pnpm install
+
+# API base URL - relative path works everywhere
+ENV VITE_API_BASE_URL=/api
+
+CMD ["pnpm", "run", "dev", "--host"]

@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application code
+COPY saga-graph /app/saga-graph
+COPY application-be /app/application-be
+COPY deployment/start-main.sh /app/deployment/start-main.sh
+COPY deployment/start-top-sources.sh /app/deployment/start-top-sources.sh
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /app/application-be/requirements.txt && \
+    pip install --no-cache-dir -r /app/saga-graph/requirements.txt
+
+# Make start scripts executable
+RUN chmod +x /app/deployment/start-main.sh && \
+    chmod +x /app/deployment/start-top-sources.sh
+
+CMD ["bash", "/app/deployment/start-main.sh"]
