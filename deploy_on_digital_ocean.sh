@@ -8,11 +8,11 @@ echo "🚀 Saga Graph - Server Setup & Deployment"
 echo ""
 
 # Check we're in the right directory
-if [ ! -f "docker compose.yml" ]; then
-    echo "❌ Error: docker compose.yml not found!"
-    echo "Please run this script from the deployment directory:"
-    echo "  cd /opt/saga-graph/deployment"
-    echo "  ./deploy.sh"
+if [ ! -f "docker-compose.yml" ]; then
+    echo "❌ Error: docker-compose.yml not found!"
+    echo "Please run this script from the victor_deployment directory:"
+    echo "  cd /opt/saga-graph/victor_deployment"
+    echo "  ./deploy_on_digital_ocean.sh"
     exit 1
 fi
 
