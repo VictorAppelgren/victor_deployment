@@ -8,18 +8,18 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
-COPY saga-graph /app/saga-graph
-COPY application-be /app/application-be
-COPY deployment/start-main.sh /app/deployment/start-main.sh
-COPY deployment/start-top-sources.sh /app/deployment/start-top-sources.sh
+COPY graph-functions /app/graph-functions
+COPY saga-be /app/saga-be
+COPY victor_deployment/start-main.sh /app/victor_deployment/start-main.sh
+COPY victor_deployment/start-top-sources.sh /app/victor_deployment/start-top-sources.sh
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r /app/application-be/requirements.txt && \
-    pip install --no-cache-dir -r /app/saga-graph/requirements.txt
+    pip install --no-cache-dir -r /app/saga-be/requirements.txt && \
+    pip install --no-cache-dir -r /app/graph-functions/requirements.txt
 
 # Make start scripts executable
-RUN chmod +x /app/deployment/start-main.sh && \
-    chmod +x /app/deployment/start-top-sources.sh
+RUN chmod +x /app/victor_deployment/start-main.sh && \
+    chmod +x /app/victor_deployment/start-top-sources.sh
 
-CMD ["bash", "/app/deployment/start-main.sh"]
+CMD ["bash", "/app/victor_deployment/start-main.sh"]

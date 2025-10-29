@@ -11,12 +11,12 @@ echo "✅ Dependencies pre-installed in Docker image"
 echo ""
 
 echo "🚀 Starting Backend API on port 8000..."
-cd /app/application-be
+cd /app/saga-be
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
 echo "🚀 Starting Graph API on port 8001..."
-cd /app/saga-graph
+cd /app/graph-functions
 python API/graph_api.py &
 GRAPH_PID=$!
 

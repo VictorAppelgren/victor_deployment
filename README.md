@@ -37,20 +37,20 @@ cd saga-graph-project
 
 # Clone all 4 repositories
 git clone <saga-graph-repo-url> saga-graph
-git clone <application-be-repo-url> application-be
+git clone <saga-be-repo-url> saga-be
 git clone <frontend-repo-url> frontend
 git clone <deployment-repo-url> deployment
 
 # Verify structure
 ls
-# Should show: saga-graph  application-be  frontend  deployment
+# Should show: saga-graph  saga-be  frontend  deployment
 ```
 
 **Final structure:**
 ```
 saga-graph-project/
 ├── saga-graph/        # Worker code (main.py, main_top_sources.py)
-├── application-be/    # Backend API code
+├── saga-be/    # Backend API code
 ├── frontend/          # Svelte UI code
 └── deployment/        # Docker configs (this folder)
 ```
@@ -134,14 +134,14 @@ docker-compose restart
 
 ### **Step 7: Rebuild After Code Changes**
 
-Use when: Changed Python/JavaScript code in saga-graph, application-be, or frontend.
+Use when: Changed Python/JavaScript code in saga-graph, saga-be, or frontend.
 
 ```bash
 cd deployment
 
 # Rebuild specific service
 docker-compose build saga-worker-main     # After saga-graph changes
-docker-compose build saga-apis            # After application-be changes
+docker-compose build saga-apis            # After saga-be changes
 docker-compose build frontend             # After frontend changes
 
 # Restart the rebuilt service

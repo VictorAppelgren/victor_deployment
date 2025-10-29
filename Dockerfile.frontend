@@ -6,7 +6,7 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 # Copy application code
-COPY application-fe /app
+COPY saga-fe /app
 
 # Install dependencies (set CI=true to avoid TTY issues)
 ENV CI=true

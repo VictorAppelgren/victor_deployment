@@ -10,7 +10,7 @@ echo "============================================"
 echo "✅ Dependencies pre-installed in Docker image"
 echo ""
 
-cd /app/saga-graph
+cd /app/graph-functions
 
 # Run main pipeline (graph should be bootstrapped)
 echo "🚀 Starting Main Pipeline (main.py)..."

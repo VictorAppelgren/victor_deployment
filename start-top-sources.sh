@@ -10,7 +10,7 @@ echo "============================================"
 echo "✅ Dependencies pre-installed in Docker image"
 echo ""
 
-cd /app/saga-graph
+cd /app/graph-functions
 
 # Run top sources worker
 echo "🚀 Starting Top Sources Worker (main_top_sources.py)..."
