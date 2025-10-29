@@ -8,8 +8,8 @@ echo "🚀 Saga Graph - Server Setup & Deployment"
 echo ""
 
 # Check we're in the right directory
-if [ ! -f "docker-compose.yml" ]; then
-    echo "❌ Error: docker-compose.yml not found!"
+if [ ! -f "docker compose.yml" ]; then
+    echo "❌ Error: docker compose.yml not found!"
     echo "Please run this script from the deployment directory:"
     echo "  cd /opt/saga-graph/deployment"
     echo "  ./deploy.sh"
@@ -30,13 +30,8 @@ if ! command -v docker &> /dev/null; then
     rm get-docker.sh
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo "Installing Docker Compose..."
-    apt install -y docker-compose-plugin
-fi
-
 docker --version
-docker-compose --version
+docker compose version
 
 # Step 3: Verify .env file exists
 if [ ! -f .env ]; then
@@ -58,11 +53,11 @@ echo "✅ Firewall configured"
 
 # Step 5: Build Docker images
 echo "🏗️  Building Docker images (this takes 5-10 minutes)..."
-docker-compose build --no-cache --pull
+docker compose build --no-cache --pull
 
 # Step 6: Start all services
 echo "🚀 Starting all services..."
-docker-compose up -d
+docker compose up -d
 
 # Step 7: Wait for services to be ready
 echo "⏳ Waiting for services to start..."
@@ -73,7 +68,7 @@ echo ""
 echo "✅ Deployment complete!"
 echo ""
 echo "📊 Container Status:"
-docker-compose ps
+docker compose ps
 echo ""
 
 # Get server IP
@@ -92,7 +87,7 @@ echo "  Username: Victor"
 echo "  Password: v123"
 echo ""
 echo "📝 View logs:"
-echo "  docker-compose logs -f"
+echo "  docker compose logs -f"
 echo ""
 echo "🧪 Test from your Mac:"
 echo "  export SERVER_IP=${SERVER_IP}"

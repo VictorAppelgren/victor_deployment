@@ -7,7 +7,7 @@ echo "🧹 Cleaning Docker environment..."
 
 # Stop and remove all containers
 echo "⏹️  Stopping containers..."
-docker-compose down --remove-orphans
+docker compose down --remove-orphans
 
 # Remove project images
 echo "🗑️  Removing images..."
