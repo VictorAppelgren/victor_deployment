@@ -14,7 +14,6 @@ RUN pnpm install
 
 # API base URL - relative path works everywhere
 ENV VITE_API_BASE_URL=/api
-ENV VITE_API_KEY=785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12
 
 # Build for production
 RUN pnpm run build
