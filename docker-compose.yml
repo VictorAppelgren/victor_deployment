@@ -29,10 +29,10 @@ services:
       dockerfile: victor_deployment/Dockerfile.apis
     container_name: saga-apis
     working_dir: /app
-    # Ports NOT exposed - only accessible through NGINX or internal network
-    # ports:
-    #   - "8000:8000"  # Backend API
-    #   - "8001:8001"  # Graph API
+    # Ports exposed for local development (workers need direct access)
+    ports:
+      - "8000:8000"  # Backend API
+      - "8001:8001"  # Graph API
     volumes:
       - apis_code:/app
     environment:

@@ -4,6 +4,48 @@
 
 SAGA Graph uses NGINX as a single entry point (port 80) to route all external traffic. The `/api` prefix is used as a routing signal to distinguish between frontend assets and backend API calls.
 
+**CRITICAL DESIGN DECISIONS:**
+
+1. **`/api` Prefix Preservation:** NGINX does NOT strip the `/api` prefix - backend routes include `/api/` in their paths
+2. **Three Authentication Methods:** API Key (workers) OR `session_token` cookie (backend) OR `user` cookie (frontend)
+3. **Login Exception:** `/api/login` bypasses auth check (must be defined BEFORE `/api/` in NGINX)
+4. **Dual-Cookie System:** Backend sets `session_token`, Frontend sets `user` - NGINX accepts EITHER
+5. **Cookie Path:** All cookies use `path="/"` to apply to all routes
+
+---
+
+## **Quick Reference**
+
+### **Authentication Methods**
+
+| Method | Used By | Header/Cookie | Purpose |
+|--------|---------|---------------|---------|
+| API Key | Workers, External clients | `X-API-Key: <key>` | Machine-to-machine auth |
+| session_token | Backend | Cookie: `session_token=<hash>` | Backend-managed sessions |
+| user | Frontend | Cookie: `user=<json>` | Frontend state + auth |
+
+### **Key Endpoints**
+
+| Endpoint | Auth Required | Purpose |
+|----------|---------------|---------|
+| `/api/login` | ❌ NO | Login endpoint (exception) |
+| `/api/*` | ✅ YES | All other API endpoints |
+| `/` | ❌ NO | Frontend assets |
+| `/neo4j/` | ❌ NO | Neo4j browser |
+
+### **Cookies Set During Login**
+
+```
+POST /api/login
+  ↓
+Backend validates credentials
+  ↓
+Backend sets: session_token (HttpOnly, 24h, path=/, SameSite=lax)
+Frontend sets: user (HttpOnly, 24h, path=/)
+  ↓
+Browser has TWO cookies for subsequent requests
+```
+
 ---
 
 ## **Architecture Diagram**
@@ -48,14 +90,16 @@ http://SERVER-IP:80
 
 ## **Exposed Ports**
 
-| Port | Service | Access | Purpose |
-|------|---------|--------|---------|
-| 80 | NGINX | External | Single entry point for all HTTP traffic |
-| 7687 | Neo4j Bolt | External | Database access for external workers |
-| 7474 | Neo4j Browser | External (via /neo4j) | Database browser UI |
-| 5173 | Frontend | Internal only | Svelte dev server |
-| 8000 | Backend API | Internal only | FastAPI backend |
-| 8001 | Graph API | Internal only | Neo4j graph operations |
+| Port | Service | Access | Purpose | Routes |
+|------|---------|--------|---------|--------|
+| 80 | NGINX | External | Single entry point for all HTTP traffic | `/`, `/api/*`, `/neo4j/*` |
+| 7687 | Neo4j Bolt | External | Database access for external workers | N/A (Bolt protocol) |
+| 7474 | Neo4j Browser | External (via /neo4j) | Database browser UI | `/neo4j/*` |
+| 5173 | Frontend | Internal only | Svelte dev server | `/*` (assets) |
+| 8000 | Backend API | **Exposed for dev** | FastAPI backend | `/health`, `/api/*` |
+| 8001 | Graph API | Internal only | Neo4j graph operations | `/neo/*` |
+
+**Note:** Port 8000 is exposed in `docker-compose.yml` for local development. In production, only port 80 should be exposed externally.
 
 ---
 
@@ -83,45 +127,108 @@ location / {
 
 ---
 
-### **2. Backend API Calls (API Key Required)**
+### **2. Backend API Calls (Cookie OR API Key Required)**
 
 **Pattern:** `/api/*`
 
 **Examples:**
 ```
-http://localhost/api/login           → Backend /login endpoint
-http://localhost/api/strategies      → Backend /strategies endpoint
-http://localhost/api/articles        → Backend /articles endpoint
-http://localhost/api/users           → Backend /users endpoint
+http://localhost/api/login                  → Backend /api/login endpoint (NO AUTH)
+http://localhost/api/strategies             → Backend /api/strategies endpoint
+http://localhost/api/articles/ingest        → Backend /api/articles/ingest endpoint
+http://localhost/api/users                  → Backend /api/users endpoint
 ```
 
 **NGINX Config:**
 ```nginx
+# Login endpoint - NO AUTH REQUIRED (must come before /api/)
+location = /api/login {
+    # Allow anyone to attempt login
+    proxy_pass http://backend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Cookie $http_cookie;
+}
+
+# Backend API - Require API key OR session cookie OR user cookie
 location /api/ {
+    # Allow if: has valid API key OR has session_token OR has user cookie
+    set $auth_ok 0;
+    
     # Check API key
-    if ($api_key_valid = 0) {
-        return 401 '{"error": "Invalid or missing API key"}';
+    if ($api_key_valid = 1) {
+        set $auth_ok 1;
     }
     
-    # Strip /api prefix and send to backend
-    proxy_pass http://backend/;
+    # Check session_token cookie (backend auth)
+    if ($cookie_session_token != "") {
+        set $auth_ok 1;
+    }
+    
+    # Check user cookie (frontend auth)
+    if ($cookie_user != "") {
+        set $auth_ok 1;
+    }
+    
+    # Reject if none
+    if ($auth_ok = 0) {
+        return 401 '{"error": "Authentication required"}';
+    }
+    
+    # Forward WITH /api prefix (NO trailing slash!)
+    proxy_pass http://backend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Cookie $http_cookie;
 }
 ```
 
-**Key Point:** The trailing slash in `proxy_pass http://backend/;` strips the `/api` prefix!
+**CRITICAL:** The `proxy_pass http://backend;` (without trailing slash) **PRESERVES** the `/api` prefix!
 
-**Flow:**
+**Authentication Flow:**
+```
+Request:  /api/strategies
+    ↓
+NGINX:    Checks authentication (3 methods):
+          1. X-API-Key header (for workers)
+          2. session_token cookie (backend sets this)
+          3. user cookie (frontend sets this)
+    ↓
+NGINX:    If ANY valid → Forward WITH /api → http://saga-apis:8000/api/strategies
+    ↓
+Backend:  Receives /api/strategies
+    ↓
+Backend:  @app.get("/api/strategies") matches ✅
+```
+
+**Login Flow (Special Case):**
 ```
 Request:  /api/login
     ↓
-NGINX:    Checks X-API-Key header
+NGINX:    NO AUTH CHECK (location = /api/login bypasses auth)
     ↓
-NGINX:    Strips /api prefix
+NGINX:    Forwards WITH /api → http://saga-apis:8000/api/login
     ↓
-Backend:  Receives /login
+Backend:  Validates credentials
     ↓
-Backend:  @app.post("/login") matches ✅
+Backend:  Sets session_token cookie (HttpOnly, 24h)
+    ↓
+Frontend: Also sets user cookie (stores username, topics)
+    ↓
+Browser:  Now has TWO cookies for subsequent requests
 ```
+
+**Implementation Note:**
+- All backend routes in `main.py` must have `/api/` prefix
+- Router in `articles.py` must have `prefix="/api/articles"`
+- `/api/login` must be defined BEFORE `/api/` in NGINX (exact match takes precedence)
+- Backend sets `session_token` cookie with `path="/"` for all routes
+- Frontend sets `user` cookie for client-side state management
+- This ensures consistency across all deployment scenarios
 
 ---
 
@@ -173,37 +280,240 @@ map $http_x_api_key $api_key_valid {
 
 ---
 
+## **Cookie-Based Authentication**
+
+### **Overview**
+
+The system uses TWO cookies, but NGINX accepts EITHER for authentication:
+
+1. **`session_token`** - Set by backend, secure hash-based session token
+2. **`user`** - Set by frontend, stores user data (username, topics)
+
+**Why this works:**
+- Backend sets `session_token` cookie (secure, hash-based)
+- Frontend ALSO sets `user` cookie (stores user data for client-side use)
+- NGINX accepts EITHER cookie for authentication
+- Redundant authentication provides flexibility and robustness
+
+### **Cookie Details**
+
+| Cookie | Set By | Purpose | Attributes | Expiry |
+|--------|--------|---------|------------|--------|
+| `session_token` | Backend (`/api/login`) | NGINX auth (secure hash) | `HttpOnly`, `Path=/`, `SameSite=lax` | 24 hours |
+| `user` | Frontend (`+page.server.ts`) | NGINX auth + Store user data | `HttpOnly`, `Path=/` | 24 hours |
+
+**Note:** Both cookies are set during login. NGINX accepts EITHER for authentication, providing redundancy.
+
+### **Login Flow**
+
+```
+1. User submits login form
+   ↓
+2. Frontend calls POST /api/login (via SvelteKit server action)
+   ↓
+3. NGINX allows /api/login (no auth required)
+   ↓
+4. Backend validates credentials
+   ↓
+5. Backend sets session_token cookie:
+   Set-Cookie: session_token=<hash>; HttpOnly; Path=/; Max-Age=86400; SameSite=lax
+   ↓
+6. Backend returns JSON: {"username":"Victor","accessible_topics":[...]}
+   ↓
+7. Frontend receives response
+   ↓
+8. Frontend sets user cookie:
+   Set-Cookie: user={"username":"Victor",...}; HttpOnly; Path=/; Max-Age=86400
+   ↓
+9. Browser now has TWO cookies
+   ↓
+10. Subsequent requests include both cookies
+    ↓
+11. NGINX checks: API key OR session_token OR user → Auth OK ✅
+```
+
+### **Backend Login Code**
+
+**File:** `saga-be/main.py`
+
+```python
+@app.post("/api/login")
+def login(request: LoginRequest, response: Response):
+    # Validate credentials
+    user = user_manager.authenticate(request.username, request.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Generate session token
+    import hashlib, time
+    session_token = hashlib.sha256(f"{user['username']}{time.time()}".encode()).hexdigest()
+    
+    # Set session_token cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        path="/",
+        httponly=True,
+        max_age=86400,  # 24 hours
+        samesite="lax"
+    )
+    
+    # Return user data
+    return {
+        "username": user["username"], 
+        "accessible_topics": user["accessible_topics"]
+    }
+```
+
+**Note:** Backend DOES set `session_token` cookie, but NGINX also accepts `user` cookie from frontend.
+
+### **Frontend Cookie Code**
+
+**File:** `saga-fe/src/routes/login/+page.server.ts`
+
+```typescript
+export const actions: Actions = {
+    default: async ({ request, cookies }) => {
+        const authResult = await authenticate(username, password);
+        
+        // Frontend sets user cookie for auth + storing user data
+        cookies.set('user', JSON.stringify(authResult), {
+            path: '/',
+            httpOnly: true,
+            secure: false,
+            maxAge: 60 * 60 * 24 // 24 hours
+        });
+        
+        throw redirect(302, '/dashboard');
+    }
+};
+```
+
+**Note:** Frontend sets the ONLY cookie used for authentication.
+
+### **Dashboard Cookie Check**
+
+**File:** `saga-fe/src/routes/dashboard/+page.server.ts`
+
+```typescript
+export const load: PageServerLoad = async ({ cookies }) => {
+    const userCookie = cookies.get('user');
+    
+    if (!userCookie) {
+        throw redirect(302, '/login');
+    }
+    
+    try {
+        const user = JSON.parse(userCookie);
+        return { user };
+    } catch {
+        throw redirect(302, '/login');
+    }
+};
+```
+
+**Note:** Dashboard checks for `user` cookie (frontend state), while NGINX checks for EITHER `session_token` OR `user` (authentication).
+
+---
+
 ## **Backend Routes**
 
-All backend routes are **clean** - no `/api` prefix in the backend code!
+**CRITICAL:** All API routes include the `/api/` prefix in the backend code. This ensures consistency across all deployment scenarios (local dev, internal workers, external workers).
 
-### **Authentication & Users**
-- `POST /login` - User authentication
-- `GET /users` - List all users (for workers)
+### **Health & Status (No `/api/` prefix)**
+- `GET /` - Root endpoint (status check)
+- `GET /health` - Health check with Graph API status
 
-### **Topics & Interests**
-- `GET /topics/all` - Get all topics (debugging)
-- `GET /interests?username=X` - Get user's accessible topics
+### **Authentication & Users (With `/api/` prefix)**
+- `POST /api/login` - User authentication (returns session cookie)
+- `GET /api/users` - List all users (for workers to iterate)
 
-### **Articles**
-- `POST /articles` - Store article (workers)
-- `GET /articles/{id}` - Get article by ID
-- `GET /articles?topic_id=X` - Get articles for topic
+### **Topics & Interests (With `/api/` prefix)**
+- `GET /api/topics/all` - Get all topics from Neo4j (debugging)
+- `GET /api/interests?username=X` - Get user's accessible topics with names
 
-### **Strategies**
-- `GET /strategies?username=X` - List user's strategies
-- `GET /strategies/{id}?username=X` - Get strategy details
-- `POST /strategies` - Create new strategy
-- `PUT /strategies/{id}` - Update strategy
-- `DELETE /strategies/{id}?username=X` - Archive strategy
+### **Articles (With `/api/` prefix - via router)**
+Router: `APIRouter(prefix="/api/articles")`
+- `POST /api/articles/ingest` - Ingest article with automatic deduplication
+- `GET /api/articles/{id}` - Get article by ID
+- `POST /api/articles/search` - Search articles by keywords
+- `POST /api/articles/bulk` - Bulk import articles (restore operations)
 
-### **Reports & Chat**
-- `GET /reports/{topic_id}` - Get report for topic
-- `POST /chat` - Chat with AI assistant
+### **Strategies (With `/api/` prefix)**
+- `GET /api/strategies?username=X` - List user's strategies
+- `GET /api/strategies/{id}?username=X` - Get strategy details
+- `POST /api/strategies` - Create new strategy
+- `PUT /api/strategies/{id}` - Update strategy
+- `DELETE /api/strategies/{id}?username=X` - Archive strategy
 
-### **Health**
-- `GET /` - Root endpoint
-- `GET /health` - Health check
+### **Reports & Chat (With `/api/` prefix)**
+- `GET /api/reports/{topic_id}` - Get report for topic (proxies to Graph API)
+- `POST /api/chat` - Chat with AI assistant (uses LangChain + OpenAI)
+
+---
+
+## **Implementation Checklist**
+
+To implement this architecture correctly:
+
+### **Backend (`saga-be/main.py`)**
+```python
+# ✅ Routes with /api/ prefix
+@app.post("/api/login")
+@app.get("/api/users")
+@app.get("/api/topics/all")
+@app.get("/api/interests")
+@app.get("/api/strategies")
+@app.post("/api/strategies")
+@app.put("/api/strategies/{strategy_id}")
+@app.delete("/api/strategies/{strategy_id}")
+@app.get("/api/reports/{topic_id}")
+@app.post("/api/chat")
+
+# ✅ Routes WITHOUT /api/ prefix
+@app.get("/")
+@app.get("/health")
+
+# ✅ Include router with /api prefix
+from src.api.routes import articles
+app.include_router(articles.router)
+```
+
+### **Articles Router (`saga-be/src/api/routes/articles.py`)**
+```python
+# ✅ Router prefix includes /api
+router = APIRouter(prefix="/api/articles", tags=["articles"])
+
+# ✅ Routes are relative to prefix
+@router.post("/ingest")        # Full path: /api/articles/ingest
+@router.get("/{article_id}")    # Full path: /api/articles/{article_id}
+@router.post("/search")         # Full path: /api/articles/search
+@router.post("/bulk")           # Full path: /api/articles/bulk
+```
+
+### **NGINX (`victor_deployment/nginx/nginx.conf`)**
+```nginx
+# ✅ Preserve /api prefix (no trailing slash!)
+location /api/ {
+    if ($api_key_valid = 0) {
+        return 401 '{"error": "Invalid or missing API key"}';
+    }
+    proxy_pass http://backend;  # ← No trailing slash!
+}
+```
+
+### **Workers (`graph-functions/src/api/backend_client.py`)**
+```python
+# ✅ All calls include /api prefix
+BACKEND_URL = os.getenv("BACKEND_API_URL")
+
+def ingest_article(article_data):
+    response = requests.post(
+        f"{BACKEND_URL}/api/articles/ingest",  # ← /api prefix
+        json=article_data,
+        headers={"X-API-Key": API_KEY} if API_KEY else {}
+    )
+```
 
 ---
 
@@ -241,37 +551,46 @@ Frontend: Redirects to /dashboard
 Worker (saga-worker-main):
     ↓
 requests.post(
-    "http://saga-apis:8000/articles",
-    headers={"X-API-Key": "785fc6c1..."},
+    "http://saga-apis:8000/api/articles/ingest",  # ← /api prefix!
+    headers={"X-API-Key": "785fc6c1..."},  # Optional (not checked)
     json=article
 )
     ↓
-Backend: Receives /articles directly (no NGINX)
+Backend: Receives /api/articles/ingest directly (bypasses NGINX)
     ↓
-Backend: @app.post("/articles") stores article ✅
+Backend: @router.post("/ingest") processes article ✅
 ```
 
-**Note:** Internal workers bypass NGINX and call backend directly using Docker network DNS (`saga-apis:8000`). API key is included but not checked by backend - it's for consistency.
+**Key Points:**
+- Internal workers bypass NGINX and call backend directly via Docker network DNS (`saga-apis:8000`)
+- API key is included in headers for consistency but NOT checked by backend (trusted environment)
+- Uses same `/api/*` paths as external workers for code consistency
 
----
-
-### **3. External Worker (Your Mac → NGINX → Backend)**
+### **3. External Worker (Mac → Server via NGINX)**
 
 ```
-Your Mac:
+Worker on Mac:
     ↓
 requests.post(
-    "http://SERVER-IP/api/articles",
-    headers={"X-API-Key": "785fc6c1..."},
+    "http://130.241.129.211/api/articles/ingest",  # ← Same path!
+    headers={"X-API-Key": "785fc6c1..."},  # Required (NGINX checks)
     json=article
 )
     ↓
-NGINX: "Has /api prefix → Check API key ✅ → Strip /api → Send to backend"
+NGINX (Port 80): Checks X-API-Key header
     ↓
-Backend: Receives /articles
+NGINX: Valid key → Forward WITH /api to backend
     ↓
-Backend: @app.post("/articles") stores article ✅
+Backend: Receives /api/articles/ingest
+    ↓
+Backend: @router.post("/ingest") processes article ✅
 ```
+
+**Key Points:**
+- External workers go through NGINX on port 80
+- NGINX validates API key before forwarding
+- Uses same `/api/*` paths as internal workers
+- **Same worker code works in both environments** - only `BACKEND_API_URL` differs!
 
 ---
 
@@ -292,6 +611,149 @@ Neo4j: Authenticates with username/password ✅
     ↓
 Connected!
 ```
+
+---
+
+## **Authentication Methods**
+
+SAGA Graph uses two authentication methods depending on the client type:
+
+| Client Type | Auth Method | Route Pattern | Checked By | Expiry | Notes |
+|-------------|-------------|---------------|------------|--------|-------|
+| **Frontend (Browser)** | Session cookie | `/api/*` | Backend (session dict) | 24 hours | Cookie auto-deleted by browser |
+| **Internal Worker** | API key (optional) | Direct: `saga-apis:8000/api/*` | None (trusted) | Never | Included for consistency |
+| **External Worker** | API key (required) | Via NGINX: `server/api/*` | NGINX | Never | Must match one of 3 valid keys |
+| **Health Checks** | None | `/health` | None | N/A | Public endpoint |
+
+### **Frontend Session Flow**
+
+**Login:**
+```python
+@app.post("/api/login")
+def login(request: LoginRequest, response: Response):
+    # 1. Authenticate user
+    user = user_manager.authenticate(username, password)
+    
+    # 2. Generate session token
+    session_token = hashlib.sha256(f"{user['username']}{time.time()}".encode()).hexdigest()
+    
+    # 3. Store in backend memory with timestamp
+    app.state.sessions[session_token] = {
+        "username": user['username'],
+        "created_at": time.time()
+    }
+    
+    # 4. Set HTTP-only cookie (browser auto-expires after 24h)
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        max_age=86400,  # 24 hours
+        samesite="lax"
+    )
+```
+
+**Protected Routes:**
+```python
+from fastapi import Cookie, Depends
+
+def verify_session(session_token: str = Cookie(None)):
+    """Verify session is valid and not expired"""
+    if not session_token:
+        raise HTTPException(401, "Not authenticated")
+    
+    session = app.state.sessions.get(session_token)
+    if not session:
+        raise HTTPException(401, "Session expired")
+    
+    # Check if older than 24h
+    if time.time() - session["created_at"] > 86400:
+        del app.state.sessions[session_token]
+        raise HTTPException(401, "Session expired")
+    
+    return session["username"]
+
+# Use in routes:
+@app.get("/api/strategies")
+def list_strategies(username: str = Depends(verify_session)):
+    # username comes from verified session
+    strategies = strategy_manager.list_strategies(username)
+    return {"strategies": strategies}
+```
+
+**Expiration Handling:**
+1. Browser sends request with cookie
+2. Backend checks: "Token exists? Token < 24h old?"
+3. If expired → 401 Unauthorized
+4. Frontend receives 401 → Redirects to `/login`
+5. User logs in again → New token issued
+
+### **Worker API Key Flow**
+
+**Internal Workers (Trusted):**
+- Include API key in headers for consistency
+- Backend does NOT check it (trusted Docker network)
+- Direct connection bypasses NGINX
+
+**External Workers (Untrusted):**
+- MUST include valid API key in headers
+- NGINX validates before forwarding
+- Invalid/missing key → 401 Unauthorized
+
+---
+
+## **Environment Variables by Deployment**
+
+**IMPORTANT:** Use setup scripts to configure these automatically! Do NOT edit `.env` files manually.
+
+### **Local Development (Mac)**
+
+```bash
+# graph-functions/.env
+# Set by: ./setup-local-dev.sh (or similar)
+BACKEND_API_URL="http://localhost:8000"
+BACKEND_API_KEY="785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12"
+NEO4J_URI="neo4j://127.0.0.1:7687"
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="SagaGraph2025!Demo"
+```
+
+**Usage:** Local testing with Docker containers running on same machine.
+
+### **Server Internal Worker**
+
+```bash
+# deployment/.env
+# Set by: ./setup-server-deployment.sh (or similar)
+BACKEND_API_URL="http://saga-apis:8000"  # Docker network DNS
+BACKEND_API_KEY="785fc6c1..."  # Optional (not checked by backend)
+NEO4J_URI="neo4j://saga-neo4j:7687"  # Docker network DNS
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="SagaGraph2025!Demo"
+```
+
+**Usage:** Workers running inside Docker on server (saga-worker-main, saga-worker-sources).
+
+### **Server External Worker (Mac → Server)**
+
+```bash
+# graph-functions/.env
+# Set by: ./setup-external-worker.sh SERVER_IP (or similar)
+BACKEND_API_URL="http://130.241.129.211"  # Server public IP
+BACKEND_API_KEY="785fc6c1..."  # Required (NGINX checks)
+NEO4J_URI="neo4j://130.241.129.211:7687"  # Server public IP
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="SagaGraph2025!Demo"
+```
+
+**Usage:** Running workers on your Mac that connect to remote server.
+
+**Key Insight:** The ONLY difference is the `BACKEND_API_URL` value:
+- Local dev: `http://localhost:8000`
+- Internal worker: `http://saga-apis:8000` (Docker DNS)
+- External worker: `http://SERVER-IP` (public IP)
+
+All worker code remains identical - just load from environment!
 
 ---
 
@@ -530,14 +992,131 @@ const API_KEY = isServer
 
 ## **Troubleshooting**
 
-### **Problem: 401 Unauthorized**
+### **Problem: 401 Unauthorized on Login**
 
-**Cause:** Missing or invalid API key
+**Symptoms:**
+- Can't login to frontend
+- curl login fails with 401
+- Error: `{"error": "Authentication required"}`
+
+**Cause:** NGINX is checking auth on `/api/login` endpoint
 
 **Solution:**
-- Check `X-API-Key` header is included
-- Verify key matches one of the three valid keys in NGINX config
-- Check NGINX logs: `docker-compose logs nginx`
+1. Verify `/api/login` exception exists in NGINX config BEFORE `/api/` block:
+```nginx
+# This MUST come first (exact match takes precedence)
+location = /api/login {
+    # No auth check
+    proxy_pass http://backend;
+}
+
+# This comes second
+location /api/ {
+    # Auth checks here
+}
+```
+
+2. Restart NGINX: `docker compose restart nginx`
+
+---
+
+### **Problem: 401 Unauthorized After Login**
+
+**Symptoms:**
+- Login works, but subsequent requests fail with 401
+- Can see strategies list, but can't click on individual strategy
+
+**Cause:** Cookie not being sent or NGINX not recognizing it
+
+**Solution:**
+1. Check browser cookies (DevTools → Application → Cookies):
+   - Should have `user` cookie with JSON data
+   - Should have `session_token` cookie (if backend sets it)
+
+2. Verify NGINX checks for BOTH cookies:
+```nginx
+# Check session_token cookie (backend auth)
+if ($cookie_session_token != "") {
+    set $auth_ok 1;
+}
+
+# Check user cookie (frontend auth)
+if ($cookie_user != "") {
+    set $auth_ok 1;
+}
+```
+
+3. Check cookie `path` attribute:
+   - Backend: `response.set_cookie(..., path="/")`
+   - Frontend: `cookies.set('user', ..., { path: '/' })`
+
+4. Clear cookies and login again
+
+---
+
+### **Problem: Login Works but Dashboard Redirects Back**
+
+**Symptoms:**
+- Login succeeds (200 OK)
+- Immediately redirects back to login page
+- Infinite redirect loop
+
+**Cause:** Frontend expects `user` cookie but it's not set
+
+**Solution:**
+1. Check `saga-fe/src/routes/login/+page.server.ts` sets cookie:
+```typescript
+cookies.set('user', JSON.stringify(authResult), {
+    path: '/',
+    httpOnly: true,
+    maxAge: 60 * 60 * 24
+});
+```
+
+2. Check `saga-fe/src/routes/dashboard/+page.server.ts` reads cookie:
+```typescript
+const userCookie = cookies.get('user');
+if (!userCookie) {
+    throw redirect(302, '/login');
+}
+```
+
+3. Rebuild frontend: `docker compose build frontend --no-cache`
+
+---
+
+### **Problem: Cookie Set but Not Sent**
+
+**Symptoms:**
+- Backend logs show `Cookies: {}`
+- Browser has cookie in DevTools
+- Requests still fail with 401
+
+**Cause:** Cookie `path` or `domain` mismatch
+
+**Solution:**
+1. Verify cookie attributes:
+   - `path="/"` (not `/api` or `/login`)
+   - `domain` should be empty or match `localhost`
+   - `SameSite=lax` (allows cross-site navigation)
+
+2. Check NGINX forwards cookies:
+```nginx
+proxy_set_header Cookie $http_cookie;
+```
+
+3. Test with curl:
+```bash
+# Login and save cookie
+curl -v -X POST http://localhost/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"Victor","password":"v123"}' \
+  -c cookies.txt
+
+# Use cookie for subsequent request
+curl -v http://localhost/api/strategies?username=Victor \
+  -b cookies.txt
+```
 
 ---
 
@@ -630,12 +1209,47 @@ docker exec saga-frontend cat /app/src/lib/auth.ts | grep "isServer"
 
 ### **Access Summary**
 
-| Client | Target | URL Pattern | API Key? |
-|--------|--------|-------------|----------|
-| Browser | Frontend | `http://localhost/` | No |
-| Browser | Backend | `http://localhost/api/*` | Yes |
-| Internal Worker | Backend | `http://saga-apis:8000/*` | Yes |
-| External Worker | Backend | `http://SERVER-IP/api/*` | Yes |
-| Any | Neo4j | `bolt://SERVER-IP:7687` | Username/Password |
+| Client | Target | URL Pattern | API Key? | Auth Check |
+|--------|--------|-------------|----------|------------|
+| Browser | Frontend | `http://localhost/` | No | None |
+| Browser | Backend | `http://localhost/api/*` | Session cookie | Backend |
+| Internal Worker | Backend | `http://saga-apis:8000/api/*` | Optional | None (trusted) |
+| External Worker | Backend | `http://SERVER-IP/api/*` | Required | NGINX |
+| Any | Neo4j | `bolt://SERVER-IP:7687` | Username/Password | Neo4j |
 
-**Everything is designed for simplicity and security!** 🚀
+---
+
+## **Summary: Key Architectural Decisions**
+
+### **1. `/api` Prefix is Preserved**
+- ✅ NGINX does NOT strip `/api` - it forwards the full path
+- ✅ Backend routes include `/api/` in their definitions
+- ✅ All clients (frontend, internal workers, external workers) use `/api/*` paths
+- ✅ Consistent URLs across all environments
+
+### **2. Same Worker Code Everywhere**
+- ✅ Workers use `BACKEND_API_URL` environment variable
+- ✅ Local dev: `http://localhost:8000`
+- ✅ Internal: `http://saga-apis:8000` (Docker DNS)
+- ✅ External: `http://SERVER-IP` (public IP)
+- ✅ All use same `/api/*` paths - only base URL changes
+
+### **3. Two Authentication Methods**
+- ✅ **Frontend:** Session cookies (24h expiry, managed by backend)
+- ✅ **Workers:** Permanent API keys (checked by NGINX for external, trusted for internal)
+- ✅ Clear separation of concerns
+
+### **4. Security Layers**
+- ✅ NGINX validates API keys for external requests
+- ✅ Backend validates session cookies for frontend
+- ✅ Internal workers trusted (Docker network isolation)
+- ✅ Health endpoints public (no auth needed)
+
+### **5. Setup Scripts Manage Configuration**
+- ✅ Never edit `.env` files manually
+- ✅ Use `./setup-local-dev.sh` for local development
+- ✅ Use `./setup-server-deployment.sh` for server workers
+- ✅ Use `./setup-external-worker.sh SERVER_IP` for Mac → Server
+- ✅ Scripts ensure correct URLs and keys
+
+**Everything is designed for simplicity, consistency, and security!** 🚀
