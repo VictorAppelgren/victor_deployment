@@ -34,7 +34,9 @@ services:
       - "8000:8000"  # Backend API
       - "8001:8001"  # Graph API
     volumes:
-      - apis_code:/app
+      # Persist uploaded articles (survives rebuilds)
+      - articles_data:/app/saga-be/data/raw_news
+      # NO CODE MOUNTS - code is baked into Docker image
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
@@ -119,8 +121,7 @@ services:
     command: sh -c "pnpm run dev --host"
     ports:
       - "5173:5173"
-    volumes:
-      - frontend_code:/app
+    # NO VOLUME MOUNT - code is baked into Docker image
     environment:
       - CI=true
       - VITE_API_BASE_URL=/api
@@ -155,7 +156,6 @@ networks:
 volumes:
   neo4j_data:
     driver: local
-  apis_code:
+  articles_data:
     driver: local
-  frontend_code:
-    driver: local
+  # Code volumes removed - code is baked into Docker images, not mounted

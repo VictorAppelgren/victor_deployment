@@ -41,8 +41,11 @@ python main_top_sources.py
 ### Backend Changes (saga-be)
 ```bash
 # After editing saga-be code:
-docker compose build saga-apis
+docker compose build --no-cache saga-apis
 docker compose restart saga-apis
+
+# Verify new code loaded:
+docker exec saga-apis grep "@app.post" /app/saga-be/main.py
 
 # View logs:
 docker compose logs -f saga-apis
@@ -51,12 +54,14 @@ docker compose logs -f saga-apis
 ### Frontend Changes (saga-fe)
 ```bash
 # After editing saga-fe code:
-docker compose build frontend
+docker compose build --no-cache frontend
 docker compose restart frontend
 
 # View logs:
 docker compose logs -f frontend
 ```
+
+**Note:** Code is baked into Docker images (no volume mounts), so always use `--no-cache` to ensure fresh build!
 
 ### NGINX Changes (rare)
 ```bash
