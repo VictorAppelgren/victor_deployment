@@ -8,9 +8,8 @@ RUN npm install -g pnpm
 # Copy application code
 COPY saga-fe /app
 
-# Install dependencies (set CI=true to avoid TTY issues)
-ENV CI=true
-RUN pnpm install
+# Install dependencies (allow lockfile updates)
+RUN pnpm install --no-frozen-lockfile
 
 # API base URL - relative path works everywhere
 ENV VITE_API_BASE_URL=/api

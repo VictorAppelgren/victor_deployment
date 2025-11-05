@@ -38,20 +38,23 @@ python main_top_sources.py
 
 ## 🔧 Rebuild Commands
 
-### Backend Changes (saga-be)
+### Backend + Graph API Changes (saga-apis)
 ```bash
-# After editing saga-be code:
+# After editing saga-be OR graph-functions/API code:
 docker compose build --no-cache saga-apis
 docker compose restart saga-apis
 
 # Verify new code loaded:
 docker exec saga-apis grep "@app.post" /app/saga-be/main.py
+docker exec saga-apis grep "admin_router" /app/graph-functions/API/graph_api.py
 
 # View logs:
 docker compose logs -f saga-apis
 ```
 
-### Frontend Changes (saga-fe)
+**Note:** `saga-apis` container runs BOTH Backend (port 8000) AND Graph API (port 8001)
+
+### Frontend Changes (saga-frontend)
 ```bash
 # After editing saga-fe code:
 docker compose build --no-cache frontend
@@ -61,20 +64,36 @@ docker compose restart frontend
 docker compose logs -f frontend
 ```
 
-**Note:** Code is baked into Docker images (no volume mounts), so always use `--no-cache` to ensure fresh build!
+### Worker Changes (saga-worker-main)
+```bash
+# After editing graph-functions worker code:
+docker compose build --no-cache saga-worker-main
+docker compose restart saga-worker-main
 
-### NGINX Changes (rare)
+# View logs:
+docker compose logs -f saga-worker-main
+```
+
+### NGINX Changes (saga-nginx)
 ```bash
 # After editing nginx/nginx.conf:
-docker compose build nginx
+docker compose build --no-cache nginx
 docker compose restart nginx
+
+# View logs:
+docker compose logs -f nginx
 ```
 
-### Worker Changes (saga-graph)
+### Neo4j (saga-neo4j)
 ```bash
-# Just Ctrl+C and re-run:
-python main.py
+# Restart Neo4j:
+docker compose restart neo4j
+
+# View logs:
+docker compose logs -f neo4j
 ```
+
+**Note:** Code is baked into Docker images (no volume mounts), so always use `--no-cache` to ensure fresh build!
 
 ---
 
