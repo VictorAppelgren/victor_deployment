@@ -36,6 +36,10 @@ services:
     volumes:
       # Persist uploaded articles (survives rebuilds)
       - articles_data:/app/saga-be/data/raw_news
+      # Persist master statistics (for admin dashboard)
+      - master_stats:/app/graph-functions/master_stats
+      # Persist master logs (for admin dashboard)
+      - master_logs:/app/graph-functions/master_logs
       # NO CODE MOUNTS - code is baked into Docker image
     environment:
       - NEO4J_URI=bolt://neo4j:7687
@@ -66,6 +70,10 @@ services:
     container_name: saga-worker-main
     working_dir: /app
     command: ["bash", "/app/victor_deployment/start-main.sh"]
+    volumes:
+      # Shared observability data (worker writes, API reads)
+      - master_stats:/app/graph-functions/master_stats
+      - master_logs:/app/graph-functions/master_logs
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
@@ -157,5 +165,9 @@ volumes:
   neo4j_data:
     driver: local
   articles_data:
+    driver: local
+  master_stats:
+    driver: local
+  master_logs:
     driver: local
   # Code volumes removed - code is baked into Docker images, not mounted

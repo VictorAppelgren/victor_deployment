@@ -258,6 +258,19 @@ docker-compose ps
 
 Separate containers allow independent scaling, isolated logs, and independent restarts
 
+### **Shared Volumes (Critical)**
+
+Containers are isolated - they don't share filesystems by default. Volumes enable data sharing:
+
+| Volume | Shared Between | Purpose |
+|--------|----------------|---------|
+| `articles_data` | saga-apis only | Article storage (Backend writes/reads) |
+| `master_stats` | saga-worker-main + saga-apis | Observability stats (Worker writes, API reads) |
+| `master_logs` | saga-worker-main + saga-apis | Pipeline logs (Worker writes, API reads) |
+| `neo4j_data` | saga-neo4j only | Graph database persistence |
+
+**Why mount to both worker and API?** Worker generates stats/logs, API serves them to admin dashboard. Without shared volumes, API sees empty directories even though worker is writing data.
+
 ---
 
 ## 🔐 Authentication & Routing
