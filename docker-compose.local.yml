@@ -75,7 +75,7 @@ services:
       - NEO4J_URI=bolt://local-neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - LOCAL_BACKEND_API=http://local-backend:8000
+      - LOCAL_BACKEND_API=http://local-backend:8000/api
       
       # Cloud (master)
       - CLOUD_SERVER_IP=${SERVER_IP}

@@ -83,6 +83,7 @@ services:
       - BACKEND_API_KEY=${API_KEY}
       - PYTHONUNBUFFERED=1
       - WORKER_NAME=main-pipeline
+      - DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM}
     depends_on:
       neo4j:
         condition: service_healthy
@@ -113,6 +114,7 @@ services:
       - BACKEND_API_KEY=${API_KEY}
       - PYTHONUNBUFFERED=1
       - WORKER_NAME=top-sources
+      - DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM}
     depends_on:
       neo4j:
         condition: service_healthy
