@@ -1,0 +1,218 @@
+#!/bin/bash
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🚀 SAGA Development Environment${NC}"
+echo "================================"
+
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+GRAPH_FUNCTIONS="$PROJECT_ROOT/graph-functions"
+
+# Load environment variables from .env.local
+if [ -f "$SCRIPT_DIR/.env.local" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env.local"
+    set +a
+else
+    echo -e "${RED}❌ .env.local not found!${NC}"
+    exit 1
+fi
+
+# Determine target based on WORKER_TARGET
+WORKER_TARGET=${WORKER_TARGET:-server}
+
+if [ "$WORKER_TARGET" = "local" ]; then
+    TARGET_NEO4J=$LOCAL_NEO4J_URI
+    TARGET_BACKEND=$LOCAL_BACKEND_URL
+    TARGET_NAME="LOCAL BACKUP"
+    TARGET_COLOR=$YELLOW
+else
+    TARGET_NEO4J=$SERVER_NEO4J_URI
+    TARGET_BACKEND=$SERVER_BACKEND_URL
+    TARGET_NAME="PRODUCTION SERVER"
+    TARGET_COLOR=$RED
+fi
+
+echo ""
+echo -e "${TARGET_COLOR}⚠️  WORKER TARGET: $TARGET_NAME${NC}"
+echo -e "${TARGET_COLOR}   Neo4j: $TARGET_NEO4J${NC}"
+echo -e "${TARGET_COLOR}   Backend: $TARGET_BACKEND${NC}"
+echo ""
+
+# Create local directories for stats/logs (NO Docker volumes!)
+echo -e "${YELLOW}📁 Setting up local directories...${NC}"
+mkdir -p "$GRAPH_FUNCTIONS/master_stats"
+mkdir -p "$GRAPH_FUNCTIONS/master_logs"
+mkdir -p "$GRAPH_FUNCTIONS/logs"
+
+# Articles are stored in saga-be, not graph-functions!
+SAGA_BE="$PROJECT_ROOT/saga-be"
+mkdir -p "$SAGA_BE/data/raw_news"
+
+# Count articles
+ARTICLE_COUNT=$(find "$SAGA_BE/data/raw_news" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+echo "✅ Directories ready"
+echo "   📰 Articles: $ARTICLE_COUNT in $SAGA_BE/data/raw_news"
+
+# Start local Neo4j for backup (if not running)
+echo -e "\n${YELLOW}🗄️  Starting local Neo4j for backup...${NC}"
+cd "$SCRIPT_DIR"
+if ! docker ps | grep -q saga-local-neo4j; then
+    echo "Starting local Neo4j container..."
+    docker run -d \
+        --name saga-local-neo4j \
+        -p 7688:7687 \
+        -p 7475:7474 \
+        -v saga_local_neo4j_data:/data \
+        -e NEO4J_AUTH=$NEO4J_USER/$NEO4J_PASSWORD \
+        -e NEO4J_PLUGINS='["apoc"]' \
+        neo4j:5 > /dev/null 2>&1
+    echo "✅ Local Neo4j started (ports 7688, 7475)"
+else
+    echo "✅ Local Neo4j already running"
+fi
+
+# Start sync in background (with lock file protection)
+echo -e "\n${YELLOW}🔄 Starting background sync...${NC}"
+cd "$GRAPH_FUNCTIONS/src/sync_server_and_local"
+
+LOCK_FILE="$SCRIPT_DIR/sync.lock"
+PID_FILE="$SCRIPT_DIR/sync.pid"
+
+# Check if sync is already running
+if [ -f "$LOCK_FILE" ] && [ -f "$PID_FILE" ]; then
+    SYNC_PID=$(cat "$PID_FILE" 2>/dev/null)
+    if ps -p "$SYNC_PID" > /dev/null 2>&1; then
+        echo "✅ Sync already running (PID: $SYNC_PID)"
+    else
+        # Stale lock/pid - clean up and restart
+        echo "⚠️  Stale sync process detected, restarting..."
+        rm -f "$LOCK_FILE" "$PID_FILE"
+    fi
+fi
+
+# Try to acquire lock (atomic operation)
+if mkdir "$LOCK_FILE" 2>/dev/null; then
+    # We got the lock! Start sync
+    trap "rm -rf '$LOCK_FILE'" EXIT  # Clean up lock on script exit
+    
+    # Set environment variables for sync script
+    export CLOUD_SERVER_IP=$SERVER_IP
+    export CLOUD_NEO4J_URI=$SERVER_NEO4J_URI
+    export CLOUD_BACKEND_API=$SERVER_BACKEND_URL
+    export LOCAL_NEO4J_URI=$LOCAL_NEO4J_URI
+    export LOCAL_BACKEND_API=$LOCAL_BACKEND_URL
+    export BACKEND_API_KEY=$API_KEY
+    
+    nohup python sync_bidirectional.py --continuous --interval 300 > "$SCRIPT_DIR/sync.log" 2>&1 &
+    SYNC_PID=$!
+    echo $SYNC_PID > "$PID_FILE"
+    echo "✅ Sync started (PID: $SYNC_PID)"
+    echo "   Syncs every 5 minutes"
+    
+    # Remove trap since sync is now running independently
+    trap - EXIT
+elif [ -f "$PID_FILE" ]; then
+    # Lock exists, check if process is actually running
+    SYNC_PID=$(cat "$PID_FILE" 2>/dev/null)
+    if ps -p "$SYNC_PID" > /dev/null 2>&1; then
+        echo "✅ Sync already running (PID: $SYNC_PID)"
+    else
+        echo "⚠️  Lock file exists but sync not running. Clean up with:"
+        echo "   rm -f $LOCK_FILE $PID_FILE"
+        echo "   Then run ./dev.sh again"
+    fi
+else
+    echo "⚠️  Could not start sync (another instance starting?)"
+fi
+
+# Setup Python environment
+echo -e "\n${YELLOW}🐍 Setting up Python environment...${NC}"
+cd "$GRAPH_FUNCTIONS"
+
+# Create venv if it doesn't exist
+if [ ! -d ".venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv .venv
+fi
+
+# Activate venv
+source .venv/bin/activate
+
+# Install/update dependencies quietly
+echo "Installing dependencies..."
+pip install -q --upgrade pip
+pip install -q -r requirements.txt
+
+# Create .env file with correct target
+echo -e "\n${YELLOW}⚙️  Configuring environment...${NC}"
+cat > .env << EOF
+# Auto-generated by dev.sh - DO NOT EDIT MANUALLY
+# Edit victor_deployment/.env.local and run dev.sh again to update
+
+# Target: $TARGET_NAME
+NEO4J_URI=$TARGET_NEO4J
+BACKEND_API_URL=$TARGET_BACKEND
+
+# Shared configuration
+NEO4J_USER=$NEO4J_USER
+NEO4J_PASSWORD=$NEO4J_PASSWORD
+NEO4J_DATABASE=$NEO4J_DATABASE
+API_KEY=$API_KEY
+
+# LLM Configuration (add your keys to .env.local if needed)
+OPENAI_API_KEY=${OPENAI_API_KEY:-}
+NEWS_API_KEY=${NEWS_API_KEY:-}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+EOF
+
+echo "✅ Environment configured for $TARGET_NAME"
+
+# Show status
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}✅ Development environment ready!${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo -e "${GREEN}Worker Target:${NC}"
+echo -e "  ${TARGET_COLOR}$TARGET_NAME${NC}"
+echo -e "  Neo4j:   $TARGET_NEO4J"
+echo -e "  Backend: $TARGET_BACKEND"
+echo ""
+echo -e "${GREEN}Quick Commands:${NC}"
+echo -e "  ${BLUE}python main.py${NC}                    # Run main pipeline"
+echo -e "  ${BLUE}python main_top_sources.py${NC}        # Run top sources worker"
+echo ""
+echo -e "${GREEN}Local Backup:${NC}"
+echo -e "  💾 Neo4j:  http://localhost:7475 (backup)"
+echo -e "  🔄 Sync:   tail -f ../victor_deployment/sync.log"
+echo -e "  🛑 Stop:   kill \$(cat ../victor_deployment/sync.pid) && rm -f ../victor_deployment/sync.lock"
+echo ""
+echo -e "${GREEN}View Stats & Logs:${NC}"
+echo -e "  ${BLUE}ls -lh master_stats/${NC}              # List stats files"
+echo -e "  ${BLUE}cat master_stats/statistics_*.json | jq${NC}  # Pretty print stats"
+echo -e "  ${BLUE}tail -f master_logs/*.log${NC}         # Watch pipeline logs"
+echo ""
+echo -e "${GREEN}Switch Target:${NC}"
+echo -e "  Edit ${BLUE}victor_deployment/.env.local${NC}"
+echo -e "  Change ${BLUE}WORKER_TARGET=server${NC} or ${BLUE}WORKER_TARGET=local${NC}"
+echo -e "  Run ${BLUE}./dev.sh${NC} again"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo -e "${YELLOW}💡 To activate the virtual environment:${NC}"
+echo -e "${GREEN}   cd ../graph-functions${NC}"
+echo -e "${GREEN}   source .venv/bin/activate${NC}"
+echo ""
+echo -e "${YELLOW}   Then run your worker:${NC}"
+echo -e "${GREEN}   python main.py${NC}               # Main pipeline"
+echo -e "${GREEN}   python main_top_sources.py${NC}  # Top sources"
+echo ""
