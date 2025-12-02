@@ -131,7 +131,8 @@ services:
       dockerfile: victor_deployment/Dockerfile.frontend
     container_name: saga-frontend
     working_dir: /app
-    command: sh -c "pnpm run dev --host"
+    # Use preview mode (serves built files from Dockerfile)
+    # command: sh -c "pnpm run dev --host"  # Old: dev mode
     ports:
       - "5173:5173"
     # NO VOLUME MOUNT - code is baked into Docker image

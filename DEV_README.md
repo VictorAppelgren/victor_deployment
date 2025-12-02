@@ -10,6 +10,10 @@ Two ways to develop: **Python workers** (fast) or **Full Docker** (testing).
 
 ```bash
 cd victor_deployment
+
+# Kill all sync processes 
+pkill -9 -f sync_bidirectional.py
+
 ./dev.sh
 ```
 
@@ -42,6 +46,22 @@ WORKER_TARGET=local   # Work on local backup
 
 # Restart
 ./dev.sh
+```
+
+**Manage background sync:**
+```bash
+# Check if running
+ps aux | grep sync_bidirectional
+
+# View sync log
+tail -f ../victor_deployment/sync.log
+
+# Stop sync (kills ALL sync processes)
+pkill -9 -f sync_bidirectional.py
+rm -rf ../victor_deployment/sync.lock ../victor_deployment/sync.pid
+
+# Restart sync
+./dev.sh  # Will detect it's not running and start it
 ```
 
 ---

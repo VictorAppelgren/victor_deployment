@@ -127,7 +127,7 @@ elif [ -f "$PID_FILE" ]; then
         echo "✅ Sync already running (PID: $SYNC_PID)"
     else
         echo "⚠️  Lock file exists but sync not running. Clean up with:"
-        echo "   rm -f $LOCK_FILE $PID_FILE"
+        echo "   rm -f \"$LOCK_FILE\" \"$PID_FILE\""
         echo "   Then run ./dev.sh again"
     fi
 else
@@ -159,8 +159,14 @@ cat > .env << EOF
 # Edit victor_deployment/.env.local and run dev.sh again to update
 
 # Target: $TARGET_NAME
+CLOUD_SERVER_IP=$SERVER_IP
 NEO4J_URI=$TARGET_NEO4J
 BACKEND_API_URL=$TARGET_BACKEND
+
+# Sync script variables
+LOCAL_BACKEND_API=http://localhost:8002/api
+CLOUD_BACKEND_API=http://$SERVER_IP/api
+CLOUD_NEO4J_URI=bolt://$SERVER_IP:7687
 
 # Shared configuration
 NEO4J_USER=$NEO4J_USER
@@ -194,7 +200,7 @@ echo ""
 echo -e "${GREEN}Local Backup:${NC}"
 echo -e "  💾 Neo4j:  http://localhost:7475 (backup)"
 echo -e "  🔄 Sync:   tail -f ../victor_deployment/sync.log"
-echo -e "  🛑 Stop:   kill \$(cat ../victor_deployment/sync.pid) && rm -f ../victor_deployment/sync.lock"
+echo -e "  🛑 Stop:   pkill -9 -f sync_bidirectional.py && rm -rf ../victor_deployment/sync.lock ../victor_deployment/sync.pid"
 echo ""
 echo -e "${GREEN}View Stats & Logs:${NC}"
 echo -e "  ${BLUE}ls -lh master_stats/${NC}              # List stats files"

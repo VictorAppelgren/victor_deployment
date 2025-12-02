@@ -17,5 +17,5 @@ ENV VITE_API_BASE_URL=/api
 # Build for production
 RUN pnpm run build
 
-# Serve the built files
-CMD ["pnpm", "run", "preview", "--host"]
+# Serve the built files on port 5173
+CMD ["pnpm", "run", "preview", "--host", "--port", "5173"]
