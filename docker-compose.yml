@@ -35,13 +35,11 @@ services:
       - "8001:8001"  # Graph API
     volumes:
       # Persist uploaded articles (survives rebuilds)
-      - articles_data:/app/saga-be/data/raw_news
+      - articles_data:/app/saga-be/data
       # Persist new statistics and logs (for admin dashboard)
       - stats_data:/app/saga-be/stats
-      # Persist user data (strategies, preferences)
+      # Persist user data (includes strategies inside users/username/)
       - users_data:/app/saga-be/users
-      # Persist strategy data
-      - strategies_data:/app/saga-be/strategies
       # NO CODE MOUNTS - code is baked into Docker image
     environment:
       - NEO4J_URI=bolt://neo4j:7687
@@ -171,7 +169,5 @@ volumes:
   stats_data:
     driver: local
   users_data:
-    driver: local
-  strategies_data:
     driver: local
   # Code volumes removed - code is baked into Docker images, not mounted
