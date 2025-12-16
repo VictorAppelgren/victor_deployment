@@ -5,7 +5,8 @@
 set -e
 cd "$(dirname "$0")"
 
-DOMAINS="sagalabs.world sagalabs.com www.sagalabs.world www.sagalabs.com"
+# Add domains here as you configure DNS for them
+DOMAINS="sagalabs.world www.sagalabs.world"
 EMAIL="admin@sagalabs.world"  # Change this to your email
 
 # Get the docker-compose project name (used for volume naming)
