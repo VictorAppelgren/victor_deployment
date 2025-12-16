@@ -24,24 +24,20 @@ CERT_EXISTS=$(docker run --rm -v ${CERT_VOLUME}:/etc/letsencrypt alpine sh -c \
 if [ "$CERT_EXISTS" = "yes" ]; then
     echo "✅ SSL certificates already exist"
     echo "To force renewal, run: docker run --rm -v ${CERT_VOLUME}:/etc/letsencrypt certbot/certbot renew --force-renewal"
-    
-    # Make sure nginx is using SSL config
-    echo "🔄 Ensuring nginx uses SSL config..."
-    docker compose up -d nginx
     exit 0
 fi
 
 echo "🔐 Requesting SSL certificates for: $DOMAINS"
 
-# Step 1: Use HTTP-only config for initial setup
+# Step 1: Use HTTP-only config temporarily (nginx must serve ACME challenge)
 echo "📝 Switching to HTTP-only nginx config..."
 cp nginx/nginx.conf nginx/nginx.conf.bak
 cp nginx/nginx-http-only.conf nginx/nginx.conf
 
-# Step 2: Start nginx with HTTP-only config
-echo "🚀 Starting nginx (HTTP only)..."
-docker compose up -d nginx
-sleep 3
+# Step 2: Reload nginx config (assumes nginx is already running)
+echo "🔄 Reloading nginx config..."
+docker exec saga-nginx nginx -s reload || docker compose up -d --no-deps nginx
+sleep 2
 
 # Step 3: Request certificates using webroot mode
 echo "🔐 Requesting certificates..."
@@ -61,12 +57,12 @@ docker run --rm \
     --email $EMAIL \
     $DOMAIN_ARGS
 
-# Step 4: Restore SSL config and restart nginx
+# Step 4: Restore SSL config and reload nginx
 echo "🔄 Switching to SSL nginx config..."
 cp nginx/nginx.conf.bak nginx/nginx.conf
 rm nginx/nginx.conf.bak
-docker compose restart nginx
+docker exec saga-nginx nginx -s reload
 
 echo "✅ Done! Your site should now be available via HTTPS"
 echo "   https://sagalabs.world"
-echo "   https://sagalabs.com"
+echo "   https://www.sagalabs.world"
