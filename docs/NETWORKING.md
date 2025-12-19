@@ -532,9 +532,9 @@ User submits form
     ↓
 Frontend: fetch('/api/login', { headers: { 'X-API-Key': 'xxx' } })
     ↓
-NGINX: "Has /api prefix → Check API key → Strip /api → Send to backend"
+NGINX: "Has /api prefix → Check API key → Forward to backend"
     ↓
-Backend: Receives /login
+Backend: Receives /api/login
     ↓
 Backend: @app.post("/login") authenticates user ✅
     ↓
@@ -789,8 +789,8 @@ fetch(`${API_BASE}/login`, {
 
 **Why `/api` prefix?**
 - Tells NGINX "this is a backend API call, not a frontend asset"
-- NGINX strips `/api` before sending to backend
-- Backend receives clean route (e.g., `/login`)
+- NGINX preserves `/api` and forwards to backend
+- Backend routes include `/api/` in their definitions
 
 ---
 
@@ -1195,8 +1195,8 @@ docker exec saga-frontend cat /app/src/lib/auth.ts | grep "isServer"
 
 - **Frontend adds `/api`** → Tells NGINX "this is a backend call"
 - **NGINX checks API key** → Security at entry point
-- **NGINX strips `/api`** → Backend receives clean routes
-- **Backend has no `/api`** → Simple, clean route definitions
+- **NGINX preserves `/api`** → Backend receives full path
+- **Backend routes include `/api/`** → Consistent paths everywhere
 
 ### **Key Benefits**
 

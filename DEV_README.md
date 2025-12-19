@@ -25,11 +25,13 @@ pkill -9 -f sync_bidirectional.py
 
 **Run your worker:**
 ```bash
-python main.py
+python entrypoints/ingest_articles.py      # Main pipeline
+python entrypoints/ingest_top_sources.py   # Top sources
+python entrypoints/write_all.py            # Write server
 ```
 
 **Make changes:**
-- Edit code → Ctrl+C → `python main.py` → Changes apply instantly!
+- Edit code → Ctrl+C → restart script → Changes apply instantly!
 
 **View synced data:**
 ```bash
@@ -90,6 +92,9 @@ docker compose restart saga-apis
 # Frontend
 docker compose build --no-cache frontend
 docker compose restart frontend
+
+# All in one
+docker compose build --no-cache frontend && docker compose up -d frontend
 
 # Workers
 docker compose build --no-cache saga-worker-main
@@ -170,7 +175,7 @@ docker stop saga-local-neo4j
 
 **Daily Development:**
 ```bash
-./dev.sh → python main.py
+./dev.sh → python entrypoints/ingest_articles.py
 ```
 
 **Testing Full Stack:**

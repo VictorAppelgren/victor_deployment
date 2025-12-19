@@ -172,7 +172,7 @@ CLOUD_NEO4J_URI=bolt://$SERVER_IP:7687
 NEO4J_USER=$NEO4J_USER
 NEO4J_PASSWORD=$NEO4J_PASSWORD
 NEO4J_DATABASE=$NEO4J_DATABASE
-API_KEY=$API_KEY
+BACKEND_API_KEY=$API_KEY
 
 # LLM Configuration (add your keys to .env.local if needed)
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -194,8 +194,9 @@ echo -e "  Neo4j:   $TARGET_NEO4J"
 echo -e "  Backend: $TARGET_BACKEND"
 echo ""
 echo -e "${GREEN}Quick Commands:${NC}"
-echo -e "  ${BLUE}python main.py${NC}                    # Run main pipeline"
-echo -e "  ${BLUE}python main_top_sources.py${NC}        # Run top sources worker"
+echo -e "  ${BLUE}python entrypoints/ingest_articles.py${NC}     # Run main pipeline"
+echo -e "  ${BLUE}python entrypoints/ingest_top_sources.py${NC}  # Run top sources worker"
+echo -e "  ${BLUE}python entrypoints/write_all.py${NC}           # Run write server"
 echo ""
 echo -e "${GREEN}Local Backup:${NC}"
 echo -e "  💾 Neo4j:  http://localhost:7475 (backup)"
@@ -219,6 +220,7 @@ echo -e "${GREEN}   cd ../graph-functions${NC}"
 echo -e "${GREEN}   source .venv/bin/activate${NC}"
 echo ""
 echo -e "${YELLOW}   Then run your worker:${NC}"
-echo -e "${GREEN}   python main.py${NC}               # Main pipeline"
-echo -e "${GREEN}   python main_top_sources.py${NC}  # Top sources"
+echo -e "${GREEN}   python entrypoints/ingest_articles.py${NC}     # Main pipeline"
+echo -e "${GREEN}   python entrypoints/ingest_top_sources.py${NC}  # Top sources"
+echo -e "${GREEN}   python entrypoints/write_all.py${NC}           # Write server"
 echo ""

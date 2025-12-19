@@ -64,7 +64,7 @@ services:
     networks:
       - saga-network
 
-  # Main Pipeline Worker (main.py - 24/7 topic processing)
+  # Main Pipeline Worker (ingest_articles.py - 24/7 topic processing)
   saga-worker-main:
     build:
       context: ..
@@ -91,7 +91,7 @@ services:
     networks:
       - saga-network
 
-  # Top Sources Worker (main_top_sources.py - premium source ingestion)
+  # Top Sources Worker (ingest_top_sources.py - premium source ingestion)
   saga-worker-sources:
     build:
       context: ..

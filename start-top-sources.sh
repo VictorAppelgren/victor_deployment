@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start script for Top Sources Worker
-# Runs main_top_sources.py (premium source ingestion)
+# Runs ingest_top_sources.py (premium source ingestion)
 
 set -e
 
@@ -13,8 +13,8 @@ echo ""
 cd /app/graph-functions
 
 # Run top sources worker
-echo "🚀 Starting Top Sources Worker (main_top_sources.py)..."
-python main_top_sources.py
+echo "🚀 Starting Ingest Top Sources Pipeline..."
+python entrypoints/ingest_top_sources.py
 
 echo ""
 echo "============================================"

@@ -2,6 +2,14 @@
 
 **Docker Compose deployment for Saga Graph - real-time news intelligence platform with graph database, AI analysis, and premium source monitoring.**
 
+> **4-Repo System**: This project consists of 4 separate repositories:
+> - `graph-functions` - Core engine (workers, agents, graph operations)
+> - `saga-be` - Backend API (FastAPI)
+> - `saga-fe` - Frontend (SvelteKit)
+> - `victor_deployment` - Deployment configs (this repo)
+>
+> **Docs**: See `docs/` folder for `ARCHITECTURE.md`, `INDEX.md`, `NETWORKING.md`
+
 ---
 
 ## 📋 Quick Reference
@@ -28,7 +36,7 @@
 
 ## 🚀 Deploy Locally (Mac) or on Server
 
-### **Step 1: Clone All Repos**
+### **Step 1: Clone All 4 Repos**
 
 ```bash
 # Create project directory
@@ -36,23 +44,23 @@ mkdir saga-graph-project
 cd saga-graph-project
 
 # Clone all 4 repositories
-git clone <saga-graph-repo-url> saga-graph
+git clone <graph-functions-repo-url> graph-functions
 git clone <saga-be-repo-url> saga-be
-git clone <frontend-repo-url> frontend
-git clone <deployment-repo-url> deployment
+git clone <saga-fe-repo-url> saga-fe
+git clone <victor-deployment-repo-url> victor_deployment
 
 # Verify structure
 ls
-# Should show: saga-graph  saga-be  frontend  deployment
+# Should show: graph-functions  saga-be  saga-fe  victor_deployment
 ```
 
 **Final structure:**
 ```
 saga-graph-project/
-├── saga-graph/        # Worker code (main.py, main_top_sources.py)
-├── saga-be/    # Backend API code
-├── frontend/          # Svelte UI code
-└── deployment/        # Docker configs (this folder)
+├── graph-functions/      # Core engine (workers, agents, LLM, graph ops)
+├── saga-be/              # Backend API (FastAPI)
+├── saga-fe/              # Frontend (SvelteKit)
+└── victor_deployment/    # Docker configs (this folder)
 ```
 
 ---
@@ -62,7 +70,7 @@ saga-graph-project/
 Use when: Neo4j password issues, major problems, or starting completely fresh.
 
 ```bash
-cd deployment
+cd victor_deployment
 
 # Stop and remove everything
 docker-compose down -v --remove-orphans
@@ -82,7 +90,7 @@ docker volume rm deployment_neo4j_data 2>/dev/null || true
 ### **Step 3: Build and Start (After Fresh Start)**
 
 ```bash
-cd deployment
+cd victor_deployment
 
 # Build all images from scratch
 docker-compose build --no-cache --pull
@@ -99,7 +107,7 @@ docker-compose ps
 ### **Step 4: Safe Shutdown**
 
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose down
 ```
 
@@ -108,7 +116,7 @@ docker-compose down
 ### **Step 5: Safe Startup**
 
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose up -d
 docker-compose ps
 ```
@@ -120,7 +128,7 @@ docker-compose ps
 Use when: Changed nginx.conf, .env, or docker-compose.yml (no code changes).
 
 ```bash
-cd deployment
+cd victor_deployment
 
 # Restart specific service
 docker-compose restart nginx              # After nginx.conf changes
@@ -134,13 +142,13 @@ docker-compose restart
 
 ### **Step 7: Rebuild After Code Changes**
 
-Use when: Changed Python/JavaScript code in saga-graph, saga-be, or frontend.
+Use when: Changed Python/JavaScript code in graph-functions, saga-be, or saga-fe.
 
 ```bash
-cd deployment
+cd victor_deployment
 
 # Rebuild specific service
-docker-compose build saga-worker-main     # After saga-graph changes
+docker-compose build saga-worker-main     # After graph-functions changes
 docker-compose build saga-apis            # After saga-be changes
 docker-compose build frontend             # After frontend changes
 
@@ -192,25 +200,25 @@ docker-compose up -d
 
 ### **Start**
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose up -d
 ```
 
 ### **Stop**
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose down
 ```
 
 ### **Restart**
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose restart
 ```
 
 ### **View Logs**
 ```bash
-cd deployment
+cd victor_deployment
 
 # All services
 docker-compose logs -f
@@ -232,7 +240,7 @@ docker-compose logs --tail=50 nginx
 
 ### **Check Status**
 ```bash
-cd deployment
+cd victor_deployment
 docker-compose ps
 ```
 
@@ -246,8 +254,8 @@ docker-compose ps
 |-----------|---------|-------|
 | **saga-neo4j** | Graph database | 7687 (Bolt), 7474 (Browser) |
 | **saga-apis** | Backend + Graph APIs | 8000, 8001 |
-| **saga-worker-main** | Main pipeline (main.py) | - |
-| **saga-worker-sources** | Top sources (main_top_sources.py) | - |
+| **saga-worker-main** | Main pipeline (ingest_articles.py) | - |
+| **saga-worker-sources** | Top sources (ingest_top_sources.py) | - |
 | **saga-frontend** | Svelte UI | 5173 |
 | **saga-nginx** | Reverse proxy + auth | 80 |
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start script for Main Pipeline Worker
-# Runs main.py (24/7 topic processing pipeline)
+# Runs ingest_articles.py (24/7 topic processing pipeline)
 
 set -e
 
@@ -13,8 +13,8 @@ echo ""
 cd /app/graph-functions
 
 # Run main pipeline (graph should be bootstrapped)
-echo "🚀 Starting Main Pipeline (main.py)..."
-python main.py
+echo "🚀 Starting Ingest Articles Pipeline..."
+python entrypoints/ingest_articles.py
 
 echo ""
 echo "============================================"

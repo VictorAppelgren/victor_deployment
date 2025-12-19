@@ -9,6 +9,7 @@ RUN npm install -g pnpm
 COPY saga-fe /app
 
 # Install dependencies (allow lockfile updates)
+ENV CI=true
 RUN pnpm install --no-frozen-lockfile
 
 # API base URL - relative path works everywhere
