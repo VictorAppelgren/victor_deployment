@@ -1,0 +1,10 @@
+# Active nginx config (generated from templates)
+nginx/nginx.conf
+
+# Sync files
+sync.lock/
+sync.log
+sync.pid
+
+# Local environment
+.env.local

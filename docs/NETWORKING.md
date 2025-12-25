@@ -198,7 +198,7 @@ NGINX:    Checks authentication (3 methods):
           2. session_token cookie (backend sets this)
           3. user cookie (frontend sets this)
     ↓
-NGINX:    If ANY valid → Forward WITH /api → http://saga-apis:8000/api/strategies
+NGINX:    If ANY valid → Forward WITH /api → http://apis:8000/api/strategies
     ↓
 Backend:  Receives /api/strategies
     ↓
@@ -211,7 +211,7 @@ Request:  /api/login
     ↓
 NGINX:    NO AUTH CHECK (location = /api/login bypasses auth)
     ↓
-NGINX:    Forwards WITH /api → http://saga-apis:8000/api/login
+NGINX:    Forwards WITH /api → http://apis:8000/api/login
     ↓
 Backend:  Validates credentials
     ↓
@@ -548,10 +548,10 @@ Frontend: Redirects to /dashboard
 ### **2. Internal Worker (Docker Container → Backend)**
 
 ```
-Worker (saga-worker-main):
+Worker (worker-main):
     ↓
 requests.post(
-    "http://saga-apis:8000/api/articles/ingest",  # ← /api prefix!
+    "http://apis:8000/api/articles/ingest",  # ← /api prefix!
     headers={"X-API-Key": "785fc6c1..."},  # Optional (not checked)
     json=article
 )
@@ -562,7 +562,7 @@ Backend: @router.post("/ingest") processes article ✅
 ```
 
 **Key Points:**
-- Internal workers bypass NGINX and call backend directly via Docker network DNS (`saga-apis:8000`)
+- Internal workers bypass NGINX and call backend directly via Docker network DNS (`apis:8000`)
 - API key is included in headers for consistency but NOT checked by backend (trusted environment)
 - Uses same `/api/*` paths as external workers for code consistency
 
@@ -725,14 +725,14 @@ NEO4J_PASSWORD="SagaGraph2025!Demo"
 ```bash
 # deployment/.env
 # Set by: ./setup-server-deployment.sh (or similar)
-BACKEND_API_URL="http://saga-apis:8000"  # Docker network DNS
+BACKEND_API_URL="http://apis:8000"  # Docker network DNS
 BACKEND_API_KEY="785fc6c1..."  # Optional (not checked by backend)
-NEO4J_URI="neo4j://saga-neo4j:7687"  # Docker network DNS
+NEO4J_URI="neo4j://neo4j:7687"  # Docker network DNS
 NEO4J_USER="neo4j"
 NEO4J_PASSWORD="SagaGraph2025!Demo"
 ```
 
-**Usage:** Workers running inside Docker on server (saga-worker-main, saga-worker-sources).
+**Usage:** Workers running inside Docker on server (worker-main, worker-sources).
 
 ### **Server External Worker (Mac → Server)**
 
@@ -750,7 +750,7 @@ NEO4J_PASSWORD="SagaGraph2025!Demo"
 
 **Key Insight:** The ONLY difference is the `BACKEND_API_URL` value:
 - Local dev: `http://localhost:8000`
-- Internal worker: `http://saga-apis:8000` (Docker DNS)
+- Internal worker: `http://apis:8000` (Docker DNS)
 - External worker: `http://SERVER-IP` (public IP)
 
 All worker code remains identical - just load from environment!
@@ -802,7 +802,7 @@ fetch(`${API_BASE}/login`, {
 # saga-graph/src/config.py or similar
 import os
 
-BACKEND_URL = "http://saga-apis:8000"  # Direct Docker network access
+BACKEND_URL = "http://apis:8000"  # Direct Docker network access
 API_KEY = os.getenv("SAGA_API_KEY", "785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12")
 
 headers = {
@@ -870,8 +870,8 @@ curl -X POST http://localhost/api/login \
 ### **Test 2: Store Article (Internal Worker)**
 
 ```bash
-# From inside saga-worker-main container
-curl -X POST http://saga-apis:8000/articles \
+# From inside worker-main container
+curl -X POST http://apis:8000/articles \
   -H "Content-Type: application/json" \
   -H "X-API-Key: 785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12" \
   -d '{"title":"Test","content":"Test article"}'
@@ -925,24 +925,24 @@ Docker Compose creates a network where **service names become hostnames**:
 # docker-compose.yml
 services:
   nginx:
-    container_name: saga-nginx
+    container_name: nginx
     networks:
-      - saga-network
+      - network
   
-  saga-apis:
-    container_name: saga-apis
+  apis:
+    container_name: apis
     networks:
-      - saga-network
+      - network
   
   frontend:
-    container_name: saga-frontend
+    container_name: frontend
     networks:
-      - saga-network
+      - network
 ```
 
 **Inside the Docker network:**
 - `http://nginx` → NGINX container
-- `http://saga-apis:8000` → Backend API container
+- `http://apis:8000` → Backend API container
 - `http://frontend:5173` → Frontend container
 - `http://neo4j:7687` → Neo4j container
 

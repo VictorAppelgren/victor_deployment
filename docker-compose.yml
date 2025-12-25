@@ -2,7 +2,7 @@ services:
   # Neo4j Database
   neo4j:
     image: neo4j:5
-    container_name: saga-neo4j
+    container_name: neo4j
     ports:
       - "7687:7687"  # Bolt - accessible from Mac
       - "7474:7474"  # Browser - accessible from Mac
@@ -20,14 +20,14 @@ services:
       start_period: 120s
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
   # APIs Container (Backend API + Graph API)
-  saga-apis:
+  apis:
     build:
       context: ..
       dockerfile: victor_deployment/Dockerfile.apis
-    container_name: saga-apis
+    container_name: apis
     working_dir: /app
     # Ports exposed for local development (workers need direct access)
     ports:
@@ -62,14 +62,14 @@ services:
       start_period: 120s
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
   # Main Pipeline Worker (ingest_articles.py - 24/7 topic processing)
-  saga-worker-main:
+  worker-main:
     build:
       context: ..
       dockerfile: victor_deployment/Dockerfile.workers
-    container_name: saga-worker-main
+    container_name: worker-main
     working_dir: /app
     command: ["bash", "/app/victor_deployment/start-main.sh"]
     environment:
@@ -77,7 +77,7 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=neo4j
-      - BACKEND_API_URL=http://saga-apis:8000
+      - BACKEND_API_URL=http://apis:8000
       - BACKEND_API_KEY=${API_KEY}
       - PYTHONUNBUFFERED=1
       - WORKER_NAME=main-pipeline
@@ -85,18 +85,18 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      saga-apis:
+      apis:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
   # Top Sources Worker (ingest_top_sources.py - premium source ingestion)
-  saga-worker-sources:
+  worker-sources:
     build:
       context: ..
       dockerfile: victor_deployment/Dockerfile.workers
-    container_name: saga-worker-sources
+    container_name: worker-sources
     working_dir: /app
     command: ["bash", "/app/victor_deployment/start-top-sources.sh"]
     environment:
@@ -104,7 +104,7 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=neo4j
-      - BACKEND_API_URL=http://saga-apis:8000
+      - BACKEND_API_URL=http://apis:8000
       - BACKEND_API_KEY=${API_KEY}
       - PYTHONUNBUFFERED=1
       - WORKER_NAME=top-sources
@@ -112,18 +112,18 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      saga-apis:
+      apis:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
   # Frontend
   frontend:
     build:
       context: ..
       dockerfile: victor_deployment/Dockerfile.frontend
-    container_name: saga-frontend
+    container_name: frontend
     working_dir: /app
     # Use preview mode (serves built files from Dockerfile)
     # command: sh -c "pnpm run dev --host"  # Old: dev mode
@@ -132,16 +132,19 @@ services:
     # NO VOLUME MOUNT - code is baked into Docker image
     environment:
       - CI=true
-      - VITE_API_BASE_URL=/api
-      - VITE_API_KEY=785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12
+      # Note: VITE_ vars are baked at build time in Dockerfile
+      # Runtime SSR uses http://apis:8000/api (hardcoded in lib/api/client.ts)
+    depends_on:
+      apis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
-    container_name: saga-nginx
+    container_name: nginx
     ports:
       - "80:80"
       - "443:443"
@@ -150,7 +153,7 @@ services:
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     depends_on:
-      saga-apis:
+      apis:
         condition: service_healthy
       frontend:
         condition: service_started
@@ -158,10 +161,10 @@ services:
         condition: service_started
     restart: unless-stopped
     networks:
-      - saga-network
+      - network
 
 networks:
-  saga-network:
+  network:
     driver: bridge
 
 volumes:

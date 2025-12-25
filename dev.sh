@@ -65,10 +65,10 @@ echo "   📰 Articles: $ARTICLE_COUNT in $SAGA_BE/data/raw_news"
 # Start local Neo4j for backup (if not running)
 echo -e "\n${YELLOW}🗄️  Starting local Neo4j for backup...${NC}"
 cd "$SCRIPT_DIR"
-if ! docker ps | grep -q saga-local-neo4j; then
+if ! docker ps | grep -q local-neo4j; then
     echo "Starting local Neo4j container..."
     docker run -d \
-        --name saga-local-neo4j \
+        --name local-neo4j \
         -p 7688:7687 \
         -p 7475:7474 \
         -v saga_local_neo4j_data:/data \
@@ -178,6 +178,7 @@ BACKEND_API_KEY=$API_KEY
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
 NEWS_API_KEY=${NEWS_API_KEY:-}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM:-false}
 EOF
 
 echo "✅ Environment configured for $TARGET_NAME"

@@ -76,7 +76,7 @@ cd victor_deployment
 docker-compose down -v --remove-orphans
 
 # Remove all images
-docker rmi deployment-saga-worker-main deployment-saga-worker-sources deployment-saga-apis deployment-frontend -f 2>/dev/null || true
+docker rmi deployment-worker-main deployment-worker-sources deployment-apis deployment-frontend -f 2>/dev/null || true
 
 # Clean build cache
 docker builder prune -f
@@ -148,12 +148,12 @@ Use when: Changed Python/JavaScript code in graph-functions, saga-be, or saga-fe
 cd victor_deployment
 
 # Rebuild specific service
-docker-compose build saga-worker-main     # After graph-functions changes
-docker-compose build saga-apis            # After saga-be changes
+docker-compose build worker-main          # After graph-functions changes
+docker-compose build apis                 # After saga-be changes
 docker-compose build frontend             # After frontend changes
 
 # Restart the rebuilt service
-docker-compose up -d saga-worker-main
+docker-compose up -d worker-main
 
 # Or rebuild everything
 docker-compose build
@@ -224,15 +224,15 @@ cd victor_deployment
 docker-compose logs -f
 
 # Individual services
-docker-compose logs -f saga-worker-main      # Main worker
-docker-compose logs -f saga-worker-sources   # Sources worker
-docker-compose logs -f saga-apis             # Backend + Graph APIs
+docker-compose logs -f worker-main           # Main worker
+docker-compose logs -f worker-sources        # Sources worker
+docker-compose logs -f apis                  # Backend + Graph APIs
 docker-compose logs -f frontend              # Svelte frontend
 docker-compose logs -f nginx                 # Nginx proxy
 docker-compose logs -f neo4j                 # Neo4j database
 
 # Multiple services
-docker-compose logs -f saga-worker-main saga-worker-sources
+docker-compose logs -f worker-main worker-sources
 
 # Last 50 lines only
 docker-compose logs --tail=50 nginx
@@ -252,17 +252,17 @@ docker-compose ps
 
 | Container | Purpose | Ports |
 |-----------|---------|-------|
-| **saga-neo4j** | Graph database | 7687 (Bolt), 7474 (Browser) |
-| **saga-apis** | Backend + Graph APIs | 8000, 8001 |
-| **saga-worker-main** | Main pipeline (ingest_articles.py) | - |
-| **saga-worker-sources** | Top sources (ingest_top_sources.py) | - |
-| **saga-frontend** | Svelte UI | 5173 |
-| **saga-nginx** | Reverse proxy + auth | 80 |
+| **neo4j** | Graph database | 7687 (Bolt), 7474 (Browser) |
+| **apis** | Backend + Graph APIs | 8000, 8001 |
+| **worker-main** | Main pipeline (ingest_articles.py) | - |
+| **worker-sources** | Top sources (ingest_top_sources.py) | - |
+| **frontend** | Svelte UI | 5173 |
+| **nginx** | Reverse proxy + auth | 80 |
 
 ### **Why Two Workers?**
 
-- **saga-worker-main**: 24/7 topic processing
-- **saga-worker-sources**: Premium source ingestion
+- **worker-main**: 24/7 topic processing
+- **worker-sources**: Premium source ingestion
 
 Separate containers allow independent scaling, isolated logs, and independent restarts
 
@@ -272,10 +272,10 @@ Containers are isolated - they don't share filesystems by default. Volumes enabl
 
 | Volume | Shared Between | Purpose |
 |--------|----------------|---------|
-| `articles_data` | saga-apis only | Article storage (Backend writes/reads) |
-| `master_stats` | saga-worker-main + saga-apis | Observability stats (Worker writes, API reads) |
-| `master_logs` | saga-worker-main + saga-apis | Pipeline logs (Worker writes, API reads) |
-| `neo4j_data` | saga-neo4j only | Graph database persistence |
+| `articles_data` | apis only | Article storage (Backend writes/reads) |
+| `master_stats` | worker-main + apis | Observability stats (Worker writes, API reads) |
+| `master_logs` | worker-main + apis | Pipeline logs (Worker writes, API reads) |
+| `neo4j_data` | neo4j only | Graph database persistence |
 
 **Why mount to both worker and API?** Worker generates stats/logs, API serves them to admin dashboard. Without shared volumes, API sees empty directories even though worker is writing data.
 

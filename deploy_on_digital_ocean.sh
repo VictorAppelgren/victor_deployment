@@ -51,7 +51,12 @@ ufw allow 7687/tcp  # Neo4j Bolt
 ufw allow 7474/tcp  # Neo4j Browser
 echo "✅ Firewall configured"
 
-# Step 5: Build Docker images
+# Step 5: Setup nginx config for SSL
+echo "🔧 Setting up nginx with SSL config..."
+cp nginx/nginx-ssl.conf nginx/nginx.conf
+echo "✅ nginx.conf configured for HTTPS"
+
+# Step 6: Build Docker images
 echo "🏗️  Building Docker images (this takes 5-10 minutes)..."
 docker compose build --no-cache --pull
 
