@@ -36,7 +36,7 @@ cp nginx/nginx-http-only.conf nginx/nginx.conf
 
 # Step 2: Reload nginx config (assumes nginx is already running)
 echo "🔄 Reloading nginx config..."
-docker exec saga-nginx nginx -s reload || docker compose up -d --no-deps nginx
+docker exec nginx nginx -s reload || docker compose up -d --no-deps nginx
 sleep 2
 
 # Step 3: Request certificates using webroot mode
@@ -57,11 +57,11 @@ docker run --rm \
     --email $EMAIL \
     $DOMAIN_ARGS
 
-# Step 4: Restore SSL config and reload nginx
+# Step 4: Switch to SSL config and reload nginx
 echo "🔄 Switching to SSL nginx config..."
-cp nginx/nginx.conf.bak nginx/nginx.conf
-rm nginx/nginx.conf.bak
-docker exec saga-nginx nginx -s reload
+rm -f nginx/nginx.conf.bak
+cp nginx/nginx-ssl.conf nginx/nginx.conf
+docker exec nginx nginx -s reload
 
 echo "✅ Done! Your site should now be available via HTTPS"
 echo "   https://sagalabs.world"
