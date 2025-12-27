@@ -57,8 +57,7 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      qdrant:
-        condition: service_healthy
+      # Note: Qdrant dependency removed - vector search is optional, not critical
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -95,8 +94,7 @@ services:
         condition: service_healthy
       apis:
         condition: service_healthy
-      qdrant:
-        condition: service_healthy
+      # Note: Qdrant dependency removed - vector search is optional
     restart: unless-stopped
     networks:
       - network
@@ -127,8 +125,7 @@ services:
         condition: service_healthy
       apis:
         condition: service_healthy
-      qdrant:
-        condition: service_healthy
+      # Note: Qdrant dependency removed - vector search is optional
     restart: unless-stopped
     networks:
       - network
