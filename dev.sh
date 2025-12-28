@@ -179,6 +179,10 @@ OPENAI_API_KEY=${OPENAI_API_KEY:-}
 NEWS_API_KEY=${NEWS_API_KEY:-}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
 DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM:-false}
+
+# Qdrant Vector DB (HTTPS via domain - single source of truth)
+QDRANT_URL=https://sagalabs.world
+QDRANT_API_KEY=${QDRANT_API_KEY:-}
 EOF
 
 echo "✅ Environment configured for $TARGET_NAME"

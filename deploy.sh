@@ -8,13 +8,15 @@ set -e  # Exit on any error
 echo "🚀 SAGA DEPLOYMENT STARTING..."
 echo "================================"
 
-# Navigate to deployment directory
-cd /opt/saga-graph/victor_deployment
+# Navigate to project root (parent of victor_deployment)
+cd /opt/saga-graph
 
 echo ""
 echo "📦 Step 1: Pulling latest code..."
-# If you're using git, uncomment:
-# git pull origin main
+git pull origin main
+
+# Navigate to deployment directory for docker commands
+cd /opt/saga-graph/victor_deployment
 
 echo ""
 echo "🛑 Step 2: Stopping existing containers..."
@@ -62,3 +64,9 @@ echo ""
 echo "🔍 Check status with:"
 echo "   docker compose ps"
 echo "================================"
+
+# ============================================
+# ONE-LINER COMMAND (copy/paste to terminal):
+# ============================================
+# cd /opt/saga-graph && git pull origin main && cd victor_deployment && docker compose down && docker compose build --no-cache && docker compose up -d && sleep 10 && docker compose ps
+# ============================================
