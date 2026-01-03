@@ -12,6 +12,7 @@
 
 | Task | Location |
 |------|----------|
+| **Change server domain/URL** | `victor_deployment/.env.local` → run `./dev.sh` |
 | **Add a new API endpoint** | `saga-be/src/routes/` |
 | **Add a new frontend page** | `saga-fe/src/routes/` |
 | **Add a new agent** | `graph-functions/src/agents/analysis/` or `/strategy/` |
@@ -161,6 +162,25 @@ Location: `graph-functions/scripts/` - Run manually when needed.
 ---
 
 ## Configuration Files
+
+### Environment (Single Source of Truth)
+
+| File | Purpose |
+|------|---------|
+| `victor_deployment/.env.local` | **EDIT THIS** - All environment config |
+| `victor_deployment/dev.sh` | Regenerates `.env` files from `.env.local` |
+| `graph-functions/.env` | **AUTO-GENERATED** - Don't edit manually |
+
+**To change the server domain:**
+```bash
+# 1. Edit victor_deployment/.env.local
+SERVER_DOMAIN=your-new-domain.com
+
+# 2. Regenerate all .env files
+cd victor_deployment && ./dev.sh
+```
+
+### Dependencies
 
 | File | Purpose |
 |------|---------|

@@ -26,6 +26,11 @@ else
     exit 1
 fi
 
+# Derive server URLs from SERVER_DOMAIN (single source of truth)
+SERVER_DOMAIN=${SERVER_DOMAIN:-sagalabs.world}
+SERVER_NEO4J_URI="bolt://${SERVER_DOMAIN}:7687"
+SERVER_BACKEND_URL="https://${SERVER_DOMAIN}"
+
 # Determine target based on WORKER_TARGET
 WORKER_TARGET=${WORKER_TARGET:-server}
 
@@ -103,11 +108,11 @@ fi
 if mkdir "$LOCK_FILE" 2>/dev/null; then
     # We got the lock! Start sync
     trap "rm -rf '$LOCK_FILE'" EXIT  # Clean up lock on script exit
-    
+
     # Set environment variables for sync script
-    export CLOUD_SERVER_IP=$SERVER_IP
+    export CLOUD_SERVER_DOMAIN=$SERVER_DOMAIN
     export CLOUD_NEO4J_URI=$SERVER_NEO4J_URI
-    export CLOUD_BACKEND_API=$SERVER_BACKEND_URL
+    export CLOUD_BACKEND_API="${SERVER_BACKEND_URL}/api"
     export LOCAL_NEO4J_URI=$LOCAL_NEO4J_URI
     export LOCAL_BACKEND_API=$LOCAL_BACKEND_URL
     export BACKEND_API_KEY=$API_KEY
@@ -159,14 +164,15 @@ cat > .env << EOF
 # Edit victor_deployment/.env.local and run dev.sh again to update
 
 # Target: $TARGET_NAME
-CLOUD_SERVER_IP=$SERVER_IP
+# Domain: $SERVER_DOMAIN (single source of truth)
+SERVER_DOMAIN=$SERVER_DOMAIN
 NEO4J_URI=$TARGET_NEO4J
 BACKEND_API_URL=$TARGET_BACKEND
 
 # Sync script variables
 LOCAL_BACKEND_API=http://localhost:8002/api
-CLOUD_BACKEND_API=http://$SERVER_IP/api
-CLOUD_NEO4J_URI=bolt://$SERVER_IP:7687
+CLOUD_BACKEND_API=${SERVER_BACKEND_URL}/api
+CLOUD_NEO4J_URI=$SERVER_NEO4J_URI
 
 # Shared configuration
 NEO4J_USER=$NEO4J_USER
@@ -180,8 +186,8 @@ NEWS_API_KEY=${NEWS_API_KEY:-}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
 DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM:-false}
 
-# Qdrant Vector DB (HTTPS via domain - single source of truth)
-QDRANT_URL=https://sagalabs.world
+# Qdrant Vector DB (uses same domain)
+QDRANT_URL=https://$SERVER_DOMAIN
 QDRANT_API_KEY=${QDRANT_API_KEY:-}
 EOF
 

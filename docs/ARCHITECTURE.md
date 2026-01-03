@@ -173,18 +173,24 @@ graph-functions/
 
 ---
 
-### `/victor_deployment` - Deployment
+### `/victor_deployment` - Deployment & Configuration
 ```
 victor_deployment/
+├── .env.local                # ⭐ SINGLE SOURCE OF TRUTH - edit this!
+├── dev.sh                    # Generates .env files from .env.local
 ├── docker-compose.yml
 ├── README.md
 └── docs/                     # All documentation
     ├── ARCHITECTURE.md
     ├── INDEX.md
-    ├── CLAUDE.md
     ├── NETWORKING.md
     └── TARGET_STRUCTURE.md
 ```
+
+**Configuration Flow:**
+1. Edit `.env.local` (change `SERVER_DOMAIN=sagalabs.world`)
+2. Run `./dev.sh`
+3. All `.env` files regenerated automatically
 
 ---
 
@@ -232,8 +238,10 @@ User request → saga-be → graph-functions/src/agents/analysis/orchestrator.py
 | Backend API | FastAPI, Python |
 | Core Engine | Python |
 | Graph Database | Neo4j (Cypher queries) |
+| Vector Database | Qdrant |
 | LLM | Multi-model router (local + cloud) |
 | Deployment | Docker Compose |
+| Configuration | `.env.local` → `dev.sh` → generated `.env` |
 
 ---
 

@@ -702,58 +702,43 @@ def list_strategies(username: str = Depends(verify_session)):
 
 ---
 
-## **Environment Variables by Deployment**
+## **Environment Variables**
 
-**IMPORTANT:** Use setup scripts to configure these automatically! Do NOT edit `.env` files manually.
+**IMPORTANT:** All configuration is managed through a single source of truth.
 
-### **Local Development (Mac)**
-
-```bash
-# graph-functions/.env
-# Set by: ./setup-local-dev.sh (or similar)
-BACKEND_API_URL="http://localhost:8000"
-BACKEND_API_KEY="785fc6c1647ff650b6b611509cc0a8f47009e6b743340503519d433f111fcf12"
-NEO4J_URI="neo4j://127.0.0.1:7687"
-NEO4J_USER="neo4j"
-NEO4J_PASSWORD="SagaGraph2025!Demo"
-```
-
-**Usage:** Local testing with Docker containers running on same machine.
-
-### **Server Internal Worker**
+### **Configuration (Single Source of Truth)**
 
 ```bash
-# deployment/.env
-# Set by: ./setup-server-deployment.sh (or similar)
-BACKEND_API_URL="http://apis:8000"  # Docker network DNS
-BACKEND_API_KEY="785fc6c1..."  # Optional (not checked by backend)
-NEO4J_URI="neo4j://neo4j:7687"  # Docker network DNS
-NEO4J_USER="neo4j"
-NEO4J_PASSWORD="SagaGraph2025!Demo"
+# Edit THIS file:
+victor_deployment/.env.local
+
+# Key setting:
+SERVER_DOMAIN=sagalabs.world   # Change this when domain changes
+
+# Then run:
+./dev.sh   # Regenerates all .env files
 ```
 
-**Usage:** Workers running inside Docker on server (worker-main, worker-sources).
+### **Generated Environment Variables**
 
-### **Server External Worker (Mac → Server)**
+After running `dev.sh`, `graph-functions/.env` contains:
 
 ```bash
-# graph-functions/.env
-# Set by: ./setup-external-worker.sh SERVER_IP (or similar)
-BACKEND_API_URL="http://130.241.129.211"  # Server public IP
-BACKEND_API_KEY="785fc6c1..."  # Required (NGINX checks)
-NEO4J_URI="neo4j://130.241.129.211:7687"  # Server public IP
-NEO4J_USER="neo4j"
-NEO4J_PASSWORD="SagaGraph2025!Demo"
+# Auto-generated - don't edit manually!
+SERVER_DOMAIN=sagalabs.world
+BACKEND_API_URL=https://sagalabs.world
+NEO4J_URI=bolt://sagalabs.world:7687
+QDRANT_URL=https://sagalabs.world
+# ... plus API keys from .env.local
 ```
 
-**Usage:** Running workers on your Mac that connect to remote server.
+### **Local vs Server Target**
 
-**Key Insight:** The ONLY difference is the `BACKEND_API_URL` value:
-- Local dev: `http://localhost:8000`
-- Internal worker: `http://apis:8000` (Docker DNS)
-- External worker: `http://SERVER-IP` (public IP)
+In `.env.local`, set `WORKER_TARGET`:
+- `WORKER_TARGET=server` → Connect to production (default)
+- `WORKER_TARGET=local` → Connect to local backup
 
-All worker code remains identical - just load from environment!
+**Key Insight:** The ONLY thing you edit is `.env.local`. Everything else is generated.
 
 ---
 
@@ -1245,11 +1230,10 @@ docker exec saga-frontend cat /app/src/lib/auth.ts | grep "isServer"
 - ✅ Internal workers trusted (Docker network isolation)
 - ✅ Health endpoints public (no auth needed)
 
-### **5. Setup Scripts Manage Configuration**
-- ✅ Never edit `.env` files manually
-- ✅ Use `./setup-local-dev.sh` for local development
-- ✅ Use `./setup-server-deployment.sh` for server workers
-- ✅ Use `./setup-external-worker.sh SERVER_IP` for Mac → Server
-- ✅ Scripts ensure correct URLs and keys
+### **5. Single Source of Truth Configuration**
+- ✅ Edit `victor_deployment/.env.local` only
+- ✅ Run `./dev.sh` to regenerate all `.env` files
+- ✅ Change `SERVER_DOMAIN` when domain changes
+- ✅ Change `WORKER_TARGET` to switch local/server
 
-**Everything is designed for simplicity, consistency, and security!** 🚀
+**Everything is designed for simplicity, consistency, and security!**

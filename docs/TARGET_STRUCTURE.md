@@ -172,13 +172,14 @@ Saga_full_v2/
 │           ├── admin/
 │           └── login/
 │
-└── victor_deployment/        # ══════════ DEPLOYMENT ══════════
-    ├── README.md
+└── victor_deployment/        # ══════════ DEPLOYMENT & CONFIG ══════════
+    ├── .env.local            # ⭐ SINGLE SOURCE OF TRUTH - edit this!
+    ├── dev.sh                # Generates .env files from .env.local
     ├── docker-compose.yml
+    ├── README.md
     └── docs/                 # All documentation lives here
         ├── ARCHITECTURE.md
         ├── INDEX.md
-        ├── CLAUDE.md
         ├── NETWORKING.md
         └── TARGET_STRUCTURE.md
 ```
