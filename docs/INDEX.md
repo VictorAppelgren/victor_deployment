@@ -38,6 +38,7 @@ These are the major capabilities of the system. Each lives in `graph-functions/s
 | **Evaluate Relevance** | `src/analysis/policies/relevance_gate.py` | Gate check for topic relevance |
 | **Generate Analysis** | `src/agents/analysis/orchestrator.py` | Full analysis pipeline |
 | **Generate Strategy** | `src/agents/strategy/orchestrator.py` | Strategy recommendations |
+| **Improve Strategy Text** | `src/functions/improve_strategy_text/` | AI-enhance user's strategy thesis |
 
 > **TODO**: Migrate these to `src/functions/` structure with co-located prompts/tests
 
