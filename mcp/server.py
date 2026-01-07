@@ -92,15 +92,29 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 # =============================================================================
-# Auth
+# Auth - Supports both header and query parameter for flexibility
 # =============================================================================
 
-async def verify_api_key(api_key: str = Depends(api_key_header)):
-    """Verify API key matches one of the valid keys."""
+async def verify_api_key(
+    request: Request,
+    api_key_from_header: str = Depends(api_key_header)
+):
+    """
+    Verify API key from either:
+    1. X-API-Key header (preferred)
+    2. ?key= query parameter (for WebFetch/browser access)
+    """
+    # Try header first
+    api_key = api_key_from_header
+
+    # Fall back to query parameter
+    if not api_key:
+        api_key = request.query_params.get("key")
+
     if not api_key or api_key not in VALID_API_KEYS:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or missing API key"
+            detail="Invalid or missing API key. Use X-API-Key header or ?key= parameter"
         )
     return api_key
 
@@ -257,6 +271,532 @@ class HideArticleRequest(BaseModel):
 
 
 # =============================================================================
+# MCP PROTOCOL (JSON-RPC 2.0) - Native Claude Code Integration
+# =============================================================================
+
+# Define available MCP tools with their schemas
+MCP_TOOLS = [
+    {
+        "name": "graph_health",
+        "description": "Get comprehensive graph health diagnostics - topic/article counts, orphans, distribution stats, stale analysis detection",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "graph_stats",
+        "description": "Get basic graph statistics - topic count, article count, relationship counts",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "all_topics",
+        "description": "List all topics with their IDs, names, types, and categories",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "topic_details",
+        "description": "Get full details for a specific topic including analysis context",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "The topic ID (e.g., 'fed_policy', 'eurusd')"}
+            },
+            "required": ["topic_id"]
+        }
+    },
+    {
+        "name": "topic_articles",
+        "description": "Get articles linked to a topic with importance scores",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "The topic ID"},
+                "limit": {"type": "integer", "description": "Max articles to return", "default": 20}
+            },
+            "required": ["topic_id"]
+        }
+    },
+    {
+        "name": "recent_articles",
+        "description": "Get recently ingested articles with their topic mappings",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer", "description": "Look back N hours", "default": 24},
+                "limit": {"type": "integer", "description": "Max articles to return", "default": 20}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "graph_query",
+        "description": "Run pre-built analytical queries by name. Available: topic_distribution, orphan_articles, topic_connections, analysis_freshness, high_importance_articles, articles_per_topic_stats, recent_ingestion, topic_overlap, relationship_summary",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query_name": {
+                    "type": "string",
+                    "description": "Name of the pre-built query",
+                    "enum": ["topic_distribution", "orphan_articles", "topic_connections", "analysis_freshness",
+                             "high_importance_articles", "articles_per_topic_stats", "recent_ingestion",
+                             "topic_overlap", "relationship_summary"]
+                },
+                "limit": {"type": "integer", "description": "Optional limit for results"}
+            },
+            "required": ["query_name"]
+        }
+    },
+    {
+        "name": "query_neo4j",
+        "description": "Execute a custom read-only Cypher query on Neo4j",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Cypher query (SELECT/MATCH only, no mutations)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "list_users",
+        "description": "List all users in the system",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "user_strategies",
+        "description": "Get strategies for a specific user",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username to get strategies for"}
+            },
+            "required": ["username"]
+        }
+    },
+    {
+        "name": "trigger_analysis",
+        "description": "Trigger re-analysis for a specific topic (requires confirmation)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "Topic ID to analyze"},
+                "confirm": {"type": "boolean", "description": "Must be true to execute"}
+            },
+            "required": ["topic_id", "confirm"]
+        }
+    },
+    {
+        "name": "system_health",
+        "description": "Get system health - CPU, memory, disk usage",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "docker_status",
+        "description": "Get status of all Docker containers",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    # === FILE TOOLS ===
+    {
+        "name": "read_file",
+        "description": "Read contents of a file from the server (within allowed paths)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path to read"},
+                "lines": {"type": "integer", "description": "Max lines to return (default 500)"}
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "search_files",
+        "description": "Search for files by name pattern in a directory",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "directory": {"type": "string", "description": "Directory to search in"},
+                "pattern": {"type": "string", "description": "File name pattern (glob)"}
+            },
+            "required": ["directory", "pattern"]
+        }
+    },
+    {
+        "name": "grep",
+        "description": "Search for text pattern in files",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Text/regex pattern to search"},
+                "path": {"type": "string", "description": "File or directory to search in"},
+                "recursive": {"type": "boolean", "description": "Search recursively", "default": True}
+            },
+            "required": ["pattern", "path"]
+        }
+    },
+    {
+        "name": "list_directory",
+        "description": "List contents of a directory",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory path"},
+                "recursive": {"type": "boolean", "description": "List recursively", "default": False}
+            },
+            "required": ["path"]
+        }
+    },
+    # === LOG TOOLS ===
+    {
+        "name": "read_log",
+        "description": "Read log file for a service (worker-main, worker-sources, apis, frontend, etc.)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "lines": {"type": "integer", "description": "Number of lines to read", "default": 100}
+            },
+            "required": ["service"]
+        }
+    },
+    {
+        "name": "search_logs",
+        "description": "Search for pattern in service logs",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "pattern": {"type": "string", "description": "Search pattern"},
+                "lines": {"type": "integer", "description": "Max lines to search", "default": 1000}
+            },
+            "required": ["service", "pattern"]
+        }
+    },
+    {
+        "name": "tail_logs",
+        "description": "Get last N lines from service logs",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service name"},
+                "lines": {"type": "integer", "description": "Number of lines", "default": 50}
+            },
+            "required": ["service"]
+        }
+    },
+    # === DEPLOYMENT TOOLS ===
+    {
+        "name": "restart_service",
+        "description": "Restart a Docker service (requires confirmation)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service to restart"},
+                "confirm": {"type": "boolean", "description": "Must be true to execute"}
+            },
+            "required": ["service", "confirm"]
+        }
+    },
+    {
+        "name": "git_status",
+        "description": "Get git status for a repository",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Repository name (saga-fe, saga-be, graph-functions, victor_deployment)"}
+            },
+            "required": ["repo"]
+        }
+    },
+    {
+        "name": "daily_stats",
+        "description": "Get daily statistics from the backend API",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+]
+
+
+class MCPRequest(BaseModel):
+    jsonrpc: str = "2.0"
+    id: Optional[int] = None
+    method: str
+    params: Optional[dict] = None
+
+
+@app.post("/mcp")
+async def mcp_jsonrpc(request: MCPRequest, raw_request: Request):
+    """
+    MCP JSON-RPC 2.0 endpoint for native Claude Code integration.
+
+    Supports:
+    - initialize: Handshake and capability exchange
+    - tools/list: List available tools with schemas
+    - tools/call: Execute a tool by name
+    """
+    # Check API key (from header or query param)
+    api_key = raw_request.headers.get("X-API-Key") or raw_request.query_params.get("key")
+
+    # Allow initialize without auth for discovery
+    if request.method != "initialize":
+        if not api_key or api_key not in VALID_API_KEYS:
+            return {
+                "jsonrpc": "2.0",
+                "id": request.id,
+                "error": {
+                    "code": -32001,
+                    "message": "Authentication required. Provide X-API-Key header."
+                }
+            }
+
+    try:
+        if request.method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": request.id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {"listChanged": False}
+                    },
+                    "serverInfo": {
+                        "name": "saga-graph-mcp",
+                        "version": "2.0.0"
+                    }
+                }
+            }
+
+        elif request.method == "notifications/initialized":
+            # Client acknowledges initialization - no response needed
+            return {"jsonrpc": "2.0", "id": request.id, "result": {}}
+
+        elif request.method == "tools/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": request.id,
+                "result": {
+                    "tools": MCP_TOOLS
+                }
+            }
+
+        elif request.method == "tools/call":
+            params = request.params or {}
+            tool_name = params.get("name")
+            arguments = params.get("arguments", {})
+
+            result = await execute_mcp_tool(tool_name, arguments)
+
+            return {
+                "jsonrpc": "2.0",
+                "id": request.id,
+                "result": {
+                    "content": [{"type": "text", "text": json.dumps(result, indent=2, default=str)}]
+                }
+            }
+
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": request.id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method not found: {request.method}"
+                }
+            }
+
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "error": {
+                "code": -32603,
+                "message": str(e)
+            }
+        }
+
+
+async def execute_mcp_tool(tool_name: str, arguments: dict) -> dict:
+    """Execute an MCP tool and return results."""
+
+    if tool_name == "graph_health":
+        response = await graph_health()
+        return response
+
+    elif tool_name == "graph_stats":
+        response = await graph_stats()
+        return response
+
+    elif tool_name == "all_topics":
+        response = await all_topics()
+        return response
+
+    elif tool_name == "topic_details":
+        req = TopicDetailsRequest(topic_id=arguments.get("topic_id"))
+        response = await topic_details(req)
+        return response
+
+    elif tool_name == "topic_articles":
+        req = TopicArticlesRequest(
+            topic_id=arguments.get("topic_id"),
+            limit=arguments.get("limit", 20)
+        )
+        response = await topic_articles(req)
+        return response
+
+    elif tool_name == "recent_articles":
+        response = await recent_articles(
+            limit=arguments.get("limit", 20),
+            hours=arguments.get("hours", 24)
+        )
+        return response
+
+    elif tool_name == "graph_query":
+        response = await graph_query(
+            query_name=arguments.get("query_name"),
+            limit=arguments.get("limit")
+        )
+        return response
+
+    elif tool_name == "query_neo4j":
+        req = QueryRequest(query=arguments.get("query"))
+        response = await query_neo4j(req)
+        return response
+
+    elif tool_name == "list_users":
+        response = await list_users()
+        return response
+
+    elif tool_name == "user_strategies":
+        req = StrategyRequest(username=arguments.get("username"))
+        response = await user_strategies(req)
+        return response
+
+    elif tool_name == "trigger_analysis":
+        if not arguments.get("confirm"):
+            return {"error": "Must set confirm=true to trigger analysis"}
+        req = TriggerAnalysisRequest(
+            topic_id=arguments.get("topic_id"),
+            force=arguments.get("force", False)
+        )
+        response = await trigger_analysis(req)
+        return response
+
+    elif tool_name == "system_health":
+        response = await system_health()
+        return response
+
+    elif tool_name == "docker_status":
+        response = await docker_status()
+        return response
+
+    # === FILE TOOLS ===
+    elif tool_name == "read_file":
+        req = ReadFileRequest(
+            path=arguments.get("path"),
+            lines=arguments.get("lines", 500)
+        )
+        response = await read_file(req)
+        return response
+
+    elif tool_name == "search_files":
+        req = SearchFilesRequest(
+            directory=arguments.get("directory"),
+            pattern=arguments.get("pattern")
+        )
+        response = await search_files(req)
+        return response
+
+    elif tool_name == "grep":
+        req = GrepRequest(
+            pattern=arguments.get("pattern"),
+            path=arguments.get("path"),
+            recursive=arguments.get("recursive", True)
+        )
+        response = await grep(req)
+        return response
+
+    elif tool_name == "list_directory":
+        req = ListDirRequest(
+            path=arguments.get("path"),
+            recursive=arguments.get("recursive", False)
+        )
+        response = await list_directory(req)
+        return response
+
+    # === LOG TOOLS ===
+    elif tool_name == "read_log":
+        req = LogRequest(
+            service=arguments.get("service"),
+            lines=arguments.get("lines", 100)
+        )
+        response = await read_log(req)
+        return response
+
+    elif tool_name == "search_logs":
+        req = SearchLogRequest(
+            service=arguments.get("service"),
+            pattern=arguments.get("pattern"),
+            lines=arguments.get("lines", 1000)
+        )
+        response = await search_logs(req)
+        return response
+
+    elif tool_name == "tail_logs":
+        response = await tail_logs(
+            service=arguments.get("service"),
+            lines=arguments.get("lines", 50)
+        )
+        return response
+
+    # === DEPLOYMENT TOOLS ===
+    elif tool_name == "restart_service":
+        if not arguments.get("confirm"):
+            return {"error": "Must set confirm=true to restart service"}
+        req = RestartRequest(service=arguments.get("service"))
+        response = await restart_service(req)
+        return response
+
+    elif tool_name == "git_status":
+        req = GitRequest(
+            repo=arguments.get("repo"),
+            command="status"
+        )
+        response = await git(req)
+        return response
+
+    elif tool_name == "daily_stats":
+        response = await daily_stats()
+        return response
+
+    else:
+        raise ValueError(f"Unknown tool: {tool_name}")
+
+
+# =============================================================================
 # Health & Status Endpoints
 # =============================================================================
 
@@ -279,7 +819,7 @@ async def mcp_status():
             "git": ["git (status/log/diff/pull)"],
             "database": ["query_neo4j"],
             "system": ["system_health", "daily_stats", "run_command"],
-            "graph": ["graph_stats", "graph_health", "all_topics", "topic_details", "topic_articles", "recent_articles"],
+            "graph": ["graph_stats", "graph_health", "graph_query/{name}", "graph_queries", "all_topics", "topic_details", "topic_articles", "recent_articles"],
             "strategies": ["list_users", "user_strategies", "strategy_analysis", "strategy_topics"],
             "actions": ["hide_article", "trigger_analysis"],
         },
@@ -772,35 +1312,13 @@ async def graph_stats():
 from src.graph.neo4j_client import run_cypher
 import json
 
-# Get counts
 topic_count = run_cypher('MATCH (t:Topic) RETURN count(t) as count')[0]['count']
 article_count = run_cypher('MATCH (a:Article) RETURN count(a) as count')[0]['count']
 about_count = run_cypher('MATCH ()-[r:ABOUT]->() RETURN count(r) as count')[0]['count']
-
-# Topic-to-topic relationships
 topic_rels = run_cypher('MATCH (:Topic)-[r:INFLUENCES|CORRELATES_WITH]->(:Topic) RETURN count(r) as count')[0]['count']
-
-# Recent activity
-recent_articles = run_cypher('''
-    MATCH (a:Article)
-    WHERE a.created_at IS NOT NULL
-    RETURN a.id, a.title, a.created_at
-    ORDER BY a.created_at DESC LIMIT 5
-''')
-
-# Topics by article count
-top_topics = run_cypher('''
-    MATCH (a:Article)-[r:ABOUT]->(t:Topic)
-    RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count
-    ORDER BY article_count DESC LIMIT 10
-''')
-
-# Orphan articles (no topic links)
-orphan_count = run_cypher('''
-    MATCH (a:Article)
-    WHERE NOT (a)-[:ABOUT]->(:Topic)
-    RETURN count(a) as count
-''')[0]['count']
+orphan_count = run_cypher('MATCH (a:Article) WHERE NOT (a)-[:ABOUT]->(:Topic) RETURN count(a) as count')[0]['count']
+recent = run_cypher('MATCH (a:Article) WHERE a.created_at IS NOT NULL RETURN a.id, a.title, a.created_at ORDER BY a.created_at DESC LIMIT 5')
+top_topics = run_cypher('MATCH (a:Article)-[r:ABOUT]->(t:Topic) RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count ORDER BY article_count DESC LIMIT 10')
 
 print(json.dumps({
     'topic_count': topic_count,
@@ -809,7 +1327,7 @@ print(json.dumps({
     'topic_relationships': topic_rels,
     'orphan_articles': orphan_count,
     'avg_articles_per_topic': round(about_count / max(topic_count, 1), 1),
-    'recent_articles': recent_articles,
+    'recent_articles': recent,
     'top_topics_by_articles': top_topics
 }, default=str))
 "'''
@@ -875,7 +1393,7 @@ async def topic_articles(req: TopicArticlesRequest):
 from src.graph.neo4j_client import run_cypher
 import json
 
-query = '''
+query = \\"""
 MATCH (a:Article)-[r:ABOUT]->(t:Topic {{id: '{req.topic_id}'}})
 WHERE a.status IS NULL OR a.status <> 'hidden'
 RETURN a.id as id, a.title as title, a.source as source,
@@ -891,7 +1409,7 @@ ORDER BY
     COALESCE(r.importance_trend, 0) + COALESCE(r.importance_catalyst, 0) DESC,
     a.published_at DESC
 LIMIT {req.limit}
-'''
+\\"""
 results = run_cypher(query)
 print(json.dumps(results, default=str))
 "'''
@@ -916,7 +1434,7 @@ import json
 
 cutoff = (datetime.utcnow() - timedelta(hours={hours})).isoformat()
 
-query = '''
+query = \\"""
 MATCH (a:Article)
 WHERE a.created_at > $cutoff
 OPTIONAL MATCH (a)-[r:ABOUT]->(t:Topic)
@@ -925,7 +1443,7 @@ RETURN a.id as id, a.title as title, a.source as source,
        collect(t.id) as topics
 ORDER BY a.created_at DESC
 LIMIT {limit}
-'''
+\\"""
 results = run_cypher(query, {{'cutoff': cutoff}})
 print(json.dumps(results, default=str))
 "'''
@@ -943,7 +1461,7 @@ print(json.dumps(results, default=str))
 @app.get("/mcp/tools/graph_health", dependencies=[Depends(verify_api_key)])
 async def graph_health():
     """Comprehensive graph health diagnostics for GOD-TIER visibility."""
-    cmd = '''docker exec -w /app/graph-functions apis python -c "
+    cmd = """docker exec -w /app/graph-functions apis python -c "
 from src.graph.neo4j_client import run_cypher
 from datetime import datetime, timedelta
 import json
@@ -985,7 +1503,7 @@ saturated_topics = [t for t in topic_distribution if t['article_count'] > 500]
 stale_analysis = run_cypher('''
     MATCH (t:Topic)
     WHERE t.last_analyzed IS NOT NULL
-    AND t.last_analyzed < datetime() - duration('P7D')
+    AND t.last_analyzed < datetime() - duration(\\\"P7D\\\")
     RETURN t.id as topic_id, t.name as topic_name, t.last_analyzed as last_analyzed
     ORDER BY t.last_analyzed ASC
     LIMIT 10
@@ -1001,13 +1519,13 @@ never_analyzed = run_cypher('''
 # === RECENT ACTIVITY ===
 articles_24h = run_cypher('''
     MATCH (a:Article)
-    WHERE a.created_at > datetime() - duration('PT24H')
+    WHERE a.created_at > datetime() - duration(\\\"PT24H\\\")
     RETURN count(a) as count
 ''')[0]['count']
 
 articles_7d = run_cypher('''
     MATCH (a:Article)
-    WHERE a.created_at > datetime() - duration('P7D')
+    WHERE a.created_at > datetime() - duration(\\\"P7D\\\")
     RETURN count(a) as count
 ''')[0]['count']
 
@@ -1048,7 +1566,7 @@ print(json.dumps({
     'stale_analysis': stale_analysis,
     'never_analyzed': never_analyzed
 }, default=str))
-"'''
+\""""
     result = run_command(cmd, timeout=60)
 
     if result["success"]:
@@ -1057,6 +1575,143 @@ print(json.dumps({
         except json.JSONDecodeError:
             return {"raw_output": result["stdout"], "success": True}
     return {"error": result["stderr"], "success": False}
+
+
+# Pre-built analytical queries for graph_query endpoint
+GRAPH_QUERIES = {
+    "topic_distribution": """
+        MATCH (a:Article)-[:ABOUT]->(t:Topic)
+        WITH t.id as topic_id, t.name as topic_name, count(a) as article_count
+        RETURN topic_id, topic_name, article_count
+        ORDER BY article_count DESC
+    """,
+    "orphan_articles": """
+        MATCH (a:Article)
+        WHERE NOT (a)-[:ABOUT]->(:Topic)
+        RETURN a.id as id, a.title as title, a.created_at as created_at
+        ORDER BY a.created_at DESC
+        LIMIT 50
+    """,
+    "topic_connections": """
+        MATCH (t1:Topic)-[r:INFLUENCES|CORRELATES_WITH]->(t2:Topic)
+        RETURN t1.id as from_topic, type(r) as relationship, t2.id as to_topic,
+               t1.name as from_name, t2.name as to_name
+        ORDER BY t1.name
+    """,
+    "analysis_freshness": """
+        MATCH (t:Topic)
+        OPTIONAL MATCH (a:Article)-[:ABOUT]->(t)
+        WITH t, count(a) as article_count
+        RETURN t.id as topic_id, t.name as topic_name,
+               t.last_analyzed as last_analyzed,
+               t.last_updated as last_updated,
+               article_count
+        ORDER BY t.last_analyzed ASC
+    """,
+    "high_importance_articles": """
+        MATCH (a:Article)-[r:ABOUT]->(t:Topic)
+        WHERE (COALESCE(r.importance_risk, 0) + COALESCE(r.importance_opportunity, 0) +
+               COALESCE(r.importance_trend, 0) + COALESCE(r.importance_catalyst, 0)) >= 3
+        RETURN a.id as id, a.title as title, t.id as topic_id, t.name as topic_name,
+               r.importance_risk as risk, r.importance_opportunity as opportunity,
+               r.importance_trend as trend, r.importance_catalyst as catalyst,
+               r.motivation as motivation
+        ORDER BY (COALESCE(r.importance_risk, 0) + COALESCE(r.importance_opportunity, 0) +
+                  COALESCE(r.importance_trend, 0) + COALESCE(r.importance_catalyst, 0)) DESC
+        LIMIT 50
+    """,
+    "articles_per_topic_stats": """
+        MATCH (a:Article)-[:ABOUT]->(t:Topic)
+        WITH t.id as topic_id, count(a) as cnt
+        RETURN min(cnt) as min_articles, max(cnt) as max_articles,
+               avg(cnt) as avg_articles, stdev(cnt) as stdev_articles,
+               percentileCont(cnt, 0.5) as median_articles,
+               percentileCont(cnt, 0.25) as p25_articles,
+               percentileCont(cnt, 0.75) as p75_articles
+    """,
+    "recent_ingestion": """
+        MATCH (a:Article)
+        WHERE a.created_at > datetime() - duration('PT24H')
+        OPTIONAL MATCH (a)-[:ABOUT]->(t:Topic)
+        RETURN a.id as id, a.title as title, a.created_at as created_at,
+               collect(t.id) as topics
+        ORDER BY a.created_at DESC
+        LIMIT 30
+    """,
+    "topic_overlap": """
+        MATCH (a:Article)-[:ABOUT]->(t1:Topic)
+        MATCH (a)-[:ABOUT]->(t2:Topic)
+        WHERE t1.id < t2.id
+        WITH t1, t2, count(a) as shared_articles
+        WHERE shared_articles > 5
+        RETURN t1.id as topic1, t1.name as name1,
+               t2.id as topic2, t2.name as name2,
+               shared_articles
+        ORDER BY shared_articles DESC
+        LIMIT 30
+    """,
+    "relationship_summary": """
+        MATCH ()-[r]->()
+        RETURN type(r) as relationship_type, count(r) as count
+        ORDER BY count DESC
+    """
+}
+
+
+@app.get("/mcp/tools/graph_query/{query_name}", dependencies=[Depends(verify_api_key)])
+async def graph_query(query_name: str, limit: int = None):
+    """
+    Run pre-built analytical queries by name.
+
+    Available queries:
+    - topic_distribution: Articles per topic
+    - orphan_articles: Articles with no topic links
+    - topic_connections: INFLUENCES/CORRELATES relationships
+    - analysis_freshness: When each topic was last analyzed
+    - high_importance_articles: Tier 3+ articles
+    - articles_per_topic_stats: Distribution statistics
+    - recent_ingestion: Last 24h articles
+    - topic_overlap: Topics sharing many articles
+    - relationship_summary: Count of each relationship type
+    """
+    if query_name not in GRAPH_QUERIES:
+        return {
+            "error": f"Unknown query: {query_name}",
+            "available_queries": list(GRAPH_QUERIES.keys())
+        }
+
+    query = GRAPH_QUERIES[query_name]
+
+    # Apply limit if provided and query doesn't have one
+    if limit and "LIMIT" not in query.upper():
+        query = query.strip() + f" LIMIT {limit}"
+
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+query = \\"""{query}\\"""
+results = run_cypher(query)
+print(json.dumps(results, default=str))
+"'''
+    result = run_command(cmd, timeout=60)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {"query": query_name, "results": data, "count": len(data)}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/graph_queries", dependencies=[Depends(verify_api_key)])
+async def list_graph_queries():
+    """List all available pre-built graph queries."""
+    return {
+        "available_queries": list(GRAPH_QUERIES.keys()),
+        "usage": "GET /mcp/tools/graph_query/{query_name}?limit=N"
+    }
 
 
 # =============================================================================
