@@ -549,6 +549,7 @@ class MCPRequest(BaseModel):
 
 
 @app.post("/mcp")
+@app.post("/mcp/")
 async def mcp_jsonrpc(request: MCPRequest, raw_request: Request):
     """
     MCP JSON-RPC 2.0 endpoint for native Claude Code integration.
