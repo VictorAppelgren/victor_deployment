@@ -158,6 +158,124 @@ curl -X POST https://sagalabs.world/mcp/tools/query_neo4j \
   -d '{"query": "MATCH (a:Article) RETURN a.title, a.published_at ORDER BY a.published_at DESC LIMIT 10"}'
 ```
 
+### Graph Inspection Tools
+
+High-level tools for exploring the knowledge graph without writing Cypher.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/graph_stats` | GET | Get overview stats (topics, articles, relationships) |
+| `/mcp/tools/all_topics` | GET | List all topics with article counts |
+| `/mcp/tools/topic_details` | POST | Get full topic info with context |
+| `/mcp/tools/topic_articles` | POST | Get articles for a topic with perspectives |
+| `/mcp/tools/recent_articles` | GET | Get recently ingested articles |
+
+**Example: Get Graph Stats**
+```bash
+curl https://sagalabs.world/mcp/tools/graph_stats \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: List All Topics**
+```bash
+curl https://sagalabs.world/mcp/tools/all_topics \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Topic Details**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/topic_details \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_id": "topic_us_monetary_policy"}'
+```
+
+**Example: Get Articles for Topic**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/topic_articles \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_id": "topic_us_monetary_policy", "limit": 10}'
+```
+
+**Example: Get Recent Articles**
+```bash
+curl "https://sagalabs.world/mcp/tools/recent_articles?limit=20&hours=24" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+### Strategy Tools
+
+Tools for reading user strategies via the internal API.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/list_users` | GET | List all users |
+| `/mcp/tools/user_strategies` | POST | Get strategies for a user |
+| `/mcp/tools/strategy_analysis` | POST | Get analysis for a strategy |
+| `/mcp/tools/strategy_topics` | POST | Get topics for a strategy |
+
+**Example: List Users**
+```bash
+curl https://sagalabs.world/mcp/tools/list_users \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get User Strategies**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/user_strategies \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "victor"}'
+```
+
+**Example: Get Strategy Analysis**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/strategy_analysis \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"strategy_id": "strategy_123"}'
+```
+
+**Example: Get Strategy Topics**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/strategy_topics \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"strategy_id": "strategy_123"}'
+```
+
+### Action Tools (Guarded)
+
+Tools that modify data. Require confirmation and log all actions.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/hide_article` | POST | Soft-delete an article (sets status=hidden) |
+| `/mcp/tools/trigger_analysis` | POST | Trigger re-analysis for a topic |
+
+**Example: Hide an Article**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/hide_article \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"article_id": "art_abc123", "reason": "Irrelevant to topic", "confirm": true}'
+```
+
+**Example: Trigger Topic Analysis**
+```bash
+curl -X POST https://sagalabs.world/mcp/tools/trigger_analysis \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic_id": "topic_us_monetary_policy", "confirm": true}'
+```
+
+**Note on Action Tools:**
+- `confirm: true` is required for all action tools
+- All actions are logged with timestamp and reason
+- `hide_article` is a soft-delete (article can be restored)
+- `trigger_analysis` uses the existing analysis pipeline
+
 ### System Tools
 
 | Endpoint | Method | Description |

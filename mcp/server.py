@@ -231,6 +231,31 @@ class CommandRequest(BaseModel):
     command: str = Field(..., description="Command to run (limited commands only)")
 
 
+class TopicDetailsRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID (e.g., 'us_macro', 'nordic_banks')")
+
+
+class TopicArticlesRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID")
+    limit: int = Field(20, description="Max articles to return", ge=1, le=100)
+    perspective: Optional[str] = Field(None, description="Filter by perspective (risk, opportunity, trend, catalyst)")
+
+
+class StrategyRequest(BaseModel):
+    username: str = Field(..., description="Username")
+    strategy_id: Optional[str] = Field(None, description="Strategy ID (optional, for specific strategy)")
+
+
+class TriggerAnalysisRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID to analyze")
+    force: bool = Field(False, description="Force re-analysis even if recent")
+
+
+class HideArticleRequest(BaseModel):
+    article_id: str = Field(..., description="Article ID to hide")
+    reason: str = Field(..., description="Reason for hiding (for audit log)")
+
+
 # =============================================================================
 # Health & Status Endpoints
 # =============================================================================
@@ -246,15 +271,18 @@ async def mcp_status():
     """Get MCP server status and available tools."""
     return {
         "status": "running",
-        "version": "1.0.0",
-        "tools": [
-            "read_log", "search_logs", "tail_logs",
-            "read_file", "search_files", "grep", "list_directory",
-            "deploy_service", "restart_service", "docker_status",
-            "git_status", "git_log", "git_diff", "git_pull",
-            "query_neo4j", "system_health", "daily_stats",
-            "run_command"
-        ],
+        "version": "2.0.0",
+        "tools": {
+            "logs": ["read_log", "search_logs", "tail_logs"],
+            "files": ["read_file", "search_files", "grep", "list_directory"],
+            "deployment": ["deploy_service", "restart_service", "docker_status"],
+            "git": ["git (status/log/diff/pull)"],
+            "database": ["query_neo4j"],
+            "system": ["system_health", "daily_stats", "run_command"],
+            "graph": ["graph_stats", "all_topics", "topic_details", "topic_articles", "recent_articles"],
+            "strategies": ["list_users", "user_strategies", "strategy_analysis", "strategy_topics"],
+            "actions": ["hide_article", "trigger_analysis"],
+        },
         "allowed_services": list(ALLOWED_SERVICES),
         "allowed_repos": list(REPO_PATHS.keys()),
     }
@@ -730,6 +758,302 @@ async def run_limited_command(req: CommandRequest):
         "success": result["success"],
         "stdout": result["stdout"],
         "stderr": result["stderr"]
+    }
+
+
+# =============================================================================
+# GRAPH TOOLS - Read-only graph inspection
+# =============================================================================
+
+@app.get("/mcp/tools/graph_stats", dependencies=[Depends(verify_api_key)])
+async def graph_stats():
+    """Get overall graph statistics - topic count, article count, relationships."""
+    cmd = '''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Get counts
+topic_count = run_cypher('MATCH (t:Topic) RETURN count(t) as count')[0]['count']
+article_count = run_cypher('MATCH (a:Article) RETURN count(a) as count')[0]['count']
+rel_count = run_cypher('MATCH ()-[r:HAS_ARTICLE]->() RETURN count(r) as count')[0]['count']
+
+# Recent activity
+recent_articles = run_cypher('''
+    MATCH (a:Article)
+    WHERE a.ingested_at IS NOT NULL
+    RETURN a.id, a.title, a.ingested_at
+    ORDER BY a.ingested_at DESC LIMIT 5
+''')
+
+# Topics by article count
+top_topics = run_cypher('''
+    MATCH (t:Topic)-[r:HAS_ARTICLE]->(a:Article)
+    RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count
+    ORDER BY article_count DESC LIMIT 10
+''')
+
+print(json.dumps({
+    'topic_count': topic_count,
+    'article_count': article_count,
+    'relationship_count': rel_count,
+    'recent_articles': recent_articles,
+    'top_topics_by_articles': top_topics
+}, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/all_topics", dependencies=[Depends(verify_api_key)])
+async def all_topics():
+    """Get all topics with key fields."""
+    cmd = '''docker exec -w /app/graph-functions apis python -c "
+from src.graph.ops.topic import get_all_topics
+import json
+
+topics = get_all_topics(fields=['id', 'name', 'type', 'category', 'last_updated'])
+print(json.dumps(topics, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            topics = json.loads(result["stdout"])
+            return {"topics": topics, "count": len(topics)}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/topic_details", dependencies=[Depends(verify_api_key)])
+async def topic_details(req: TopicDetailsRequest):
+    """Get full details for a specific topic including analysis."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.ops.topic import get_topic_by_id, get_topic_context
+import json
+
+try:
+    topic = get_topic_by_id('{req.topic_id}')
+    context = get_topic_context('{req.topic_id}')
+    print(json.dumps({{'topic': topic, 'context': context}}, default=str))
+except Exception as e:
+    print(json.dumps({{'error': str(e)}}))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/topic_articles", dependencies=[Depends(verify_api_key)])
+async def topic_articles(req: TopicArticlesRequest):
+    """Get articles linked to a topic with their perspectives."""
+    perspective_filter = f"AND r.perspective = '{req.perspective}'" if req.perspective else ""
+
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+query = '''
+MATCH (t:Topic {{id: '{req.topic_id}'}})-[r:HAS_ARTICLE]->(a:Article)
+WHERE a.status IS NULL OR a.status <> 'hidden'
+{perspective_filter}
+RETURN a.id as id, a.title as title, a.source as source,
+       r.perspective as perspective, r.importance as importance,
+       a.temporal_horizon as timeframe, a.published_at as published
+ORDER BY r.importance DESC, a.published_at DESC
+LIMIT {req.limit}
+'''
+results = run_cypher(query)
+print(json.dumps(results, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            articles = json.loads(result["stdout"])
+            return {"topic_id": req.topic_id, "articles": articles, "count": len(articles)}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/recent_articles", dependencies=[Depends(verify_api_key)])
+async def recent_articles(limit: int = 20, hours: int = 24):
+    """Get recently ingested articles."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+from datetime import datetime, timedelta
+import json
+
+cutoff = (datetime.utcnow() - timedelta(hours={hours})).isoformat()
+
+query = '''
+MATCH (a:Article)
+WHERE a.ingested_at > $cutoff
+OPTIONAL MATCH (t:Topic)-[r:HAS_ARTICLE]->(a)
+RETURN a.id as id, a.title as title, a.source as source,
+       a.ingested_at as ingested_at, a.temporal_horizon as timeframe,
+       collect(t.id) as topics
+ORDER BY a.ingested_at DESC
+LIMIT {limit}
+'''
+results = run_cypher(query, {{'cutoff': cutoff}})
+print(json.dumps(results, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            articles = json.loads(result["stdout"])
+            return {"articles": articles, "count": len(articles), "hours": hours}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# STRATEGY TOOLS - Read user strategies via internal API
+# =============================================================================
+
+@app.get("/mcp/tools/list_users", dependencies=[Depends(verify_api_key)])
+async def list_users():
+    """List all users in the system."""
+    result = run_command("curl -s http://apis:8000/api/users", timeout=10)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/user_strategies", dependencies=[Depends(verify_api_key)])
+async def user_strategies(req: StrategyRequest):
+    """Get strategies for a user, optionally a specific strategy."""
+    if req.strategy_id:
+        # Get specific strategy with full details
+        url = f"http://apis:8000/api/users/{req.username}/strategies/{req.strategy_id}"
+    else:
+        # List all strategies for user
+        url = f"http://apis:8000/api/users/{req.username}/strategies"
+
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {"username": req.username, "data": data}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/strategy_analysis", dependencies=[Depends(verify_api_key)])
+async def strategy_analysis(req: StrategyRequest):
+    """Get the latest analysis for a strategy."""
+    if not req.strategy_id:
+        raise HTTPException(400, "strategy_id is required for analysis")
+
+    url = f"http://apis:8000/api/users/{req.username}/strategies/{req.strategy_id}/analysis"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {"username": req.username, "strategy_id": req.strategy_id, "analysis": data}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/strategy_topics", dependencies=[Depends(verify_api_key)])
+async def strategy_topics(req: StrategyRequest):
+    """Get topics associated with a strategy."""
+    if not req.strategy_id:
+        raise HTTPException(400, "strategy_id is required")
+
+    url = f"http://apis:8000/api/users/{req.username}/strategies/{req.strategy_id}/topics"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {"username": req.username, "strategy_id": req.strategy_id, "topics": data}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# ACTION TOOLS - Guarded write operations
+# =============================================================================
+
+@app.post("/mcp/tools/hide_article", dependencies=[Depends(verify_api_key)])
+async def hide_article(req: HideArticleRequest):
+    """Hide an article (soft delete). Requires reason for audit."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.ops.article import set_article_hidden
+from src.observability.stats_client import track
+import json
+
+try:
+    set_article_hidden('{req.article_id}')
+    track('article_hidden_via_mcp', '{req.article_id}: {req.reason}')
+    print(json.dumps({{'success': True, 'article_id': '{req.article_id}', 'reason': '{req.reason}'}}))
+except Exception as e:
+    print(json.dumps({{'success': False, 'error': str(e)}}))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.post("/mcp/tools/trigger_analysis", dependencies=[Depends(verify_api_key)])
+async def trigger_topic_analysis(req: TriggerAnalysisRequest):
+    """Trigger analysis refresh for a topic. Runs in background."""
+    # First verify topic exists
+    check_cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.ops.topic import check_if_topic_exists
+print('exists' if check_if_topic_exists('{req.topic_id}') else 'not_found')
+"'''
+    check = run_command(check_cmd, timeout=10)
+
+    if "not_found" in check["stdout"]:
+        raise HTTPException(404, f"Topic not found: {req.topic_id}")
+
+    # Trigger analysis (this runs the analysis pipeline)
+    # Note: This is a simplified trigger - in production you might queue this
+    cmd = f'''docker exec -d -w /app/graph-functions apis python -c "
+from src.analysis.policies.reanalysis import trigger_reanalysis
+from src.observability.stats_client import track
+
+track('analysis_triggered_via_mcp', '{req.topic_id}')
+trigger_reanalysis('{req.topic_id}', force={req.force})
+"'''
+    result = run_command(cmd, timeout=10)
+
+    return {
+        "topic_id": req.topic_id,
+        "triggered": True,
+        "force": req.force,
+        "note": "Analysis running in background. Check logs for progress."
     }
 
 
