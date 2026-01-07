@@ -279,7 +279,7 @@ async def mcp_status():
             "git": ["git (status/log/diff/pull)"],
             "database": ["query_neo4j"],
             "system": ["system_health", "daily_stats", "run_command"],
-            "graph": ["graph_stats", "all_topics", "topic_details", "topic_articles", "recent_articles"],
+            "graph": ["graph_stats", "graph_health", "all_topics", "topic_details", "topic_articles", "recent_articles"],
             "strategies": ["list_users", "user_strategies", "strategy_analysis", "strategy_topics"],
             "actions": ["hide_article", "trigger_analysis"],
         },
@@ -775,27 +775,40 @@ import json
 # Get counts
 topic_count = run_cypher('MATCH (t:Topic) RETURN count(t) as count')[0]['count']
 article_count = run_cypher('MATCH (a:Article) RETURN count(a) as count')[0]['count']
-rel_count = run_cypher('MATCH ()-[r:HAS_ARTICLE]->() RETURN count(r) as count')[0]['count']
+about_count = run_cypher('MATCH ()-[r:ABOUT]->() RETURN count(r) as count')[0]['count']
+
+# Topic-to-topic relationships
+topic_rels = run_cypher('MATCH (:Topic)-[r:INFLUENCES|CORRELATES_WITH]->(:Topic) RETURN count(r) as count')[0]['count']
 
 # Recent activity
 recent_articles = run_cypher('''
     MATCH (a:Article)
-    WHERE a.ingested_at IS NOT NULL
-    RETURN a.id, a.title, a.ingested_at
-    ORDER BY a.ingested_at DESC LIMIT 5
+    WHERE a.created_at IS NOT NULL
+    RETURN a.id, a.title, a.created_at
+    ORDER BY a.created_at DESC LIMIT 5
 ''')
 
 # Topics by article count
 top_topics = run_cypher('''
-    MATCH (t:Topic)-[r:HAS_ARTICLE]->(a:Article)
+    MATCH (a:Article)-[r:ABOUT]->(t:Topic)
     RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count
     ORDER BY article_count DESC LIMIT 10
 ''')
 
+# Orphan articles (no topic links)
+orphan_count = run_cypher('''
+    MATCH (a:Article)
+    WHERE NOT (a)-[:ABOUT]->(:Topic)
+    RETURN count(a) as count
+''')[0]['count']
+
 print(json.dumps({
     'topic_count': topic_count,
     'article_count': article_count,
-    'relationship_count': rel_count,
+    'about_relationships': about_count,
+    'topic_relationships': topic_rels,
+    'orphan_articles': orphan_count,
+    'avg_articles_per_topic': round(about_count / max(topic_count, 1), 1),
     'recent_articles': recent_articles,
     'top_topics_by_articles': top_topics
 }, default=str))
@@ -857,21 +870,26 @@ except Exception as e:
 
 @app.post("/mcp/tools/topic_articles", dependencies=[Depends(verify_api_key)])
 async def topic_articles(req: TopicArticlesRequest):
-    """Get articles linked to a topic with their perspectives."""
-    perspective_filter = f"AND r.perspective = '{req.perspective}'" if req.perspective else ""
-
+    """Get articles linked to a topic with their importance tiers."""
     cmd = f'''docker exec -w /app/graph-functions apis python -c "
 from src.graph.neo4j_client import run_cypher
 import json
 
 query = '''
-MATCH (t:Topic {{id: '{req.topic_id}'}})-[r:HAS_ARTICLE]->(a:Article)
+MATCH (a:Article)-[r:ABOUT]->(t:Topic {{id: '{req.topic_id}'}})
 WHERE a.status IS NULL OR a.status <> 'hidden'
-{perspective_filter}
 RETURN a.id as id, a.title as title, a.source as source,
-       r.perspective as perspective, r.importance as importance,
-       a.temporal_horizon as timeframe, a.published_at as published
-ORDER BY r.importance DESC, a.published_at DESC
+       r.timeframe as timeframe,
+       r.importance_risk as importance_risk,
+       r.importance_opportunity as importance_opportunity,
+       r.importance_trend as importance_trend,
+       r.importance_catalyst as importance_catalyst,
+       r.motivation as motivation,
+       a.published_at as published
+ORDER BY
+    COALESCE(r.importance_risk, 0) + COALESCE(r.importance_opportunity, 0) +
+    COALESCE(r.importance_trend, 0) + COALESCE(r.importance_catalyst, 0) DESC,
+    a.published_at DESC
 LIMIT {req.limit}
 '''
 results = run_cypher(query)
@@ -900,12 +918,12 @@ cutoff = (datetime.utcnow() - timedelta(hours={hours})).isoformat()
 
 query = '''
 MATCH (a:Article)
-WHERE a.ingested_at > $cutoff
-OPTIONAL MATCH (t:Topic)-[r:HAS_ARTICLE]->(a)
+WHERE a.created_at > $cutoff
+OPTIONAL MATCH (a)-[r:ABOUT]->(t:Topic)
 RETURN a.id as id, a.title as title, a.source as source,
-       a.ingested_at as ingested_at, a.temporal_horizon as timeframe,
+       a.created_at as created_at,
        collect(t.id) as topics
-ORDER BY a.ingested_at DESC
+ORDER BY a.created_at DESC
 LIMIT {limit}
 '''
 results = run_cypher(query, {{'cutoff': cutoff}})
@@ -917,6 +935,125 @@ print(json.dumps(results, default=str))
         try:
             articles = json.loads(result["stdout"])
             return {"articles": articles, "count": len(articles), "hours": hours}
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/graph_health", dependencies=[Depends(verify_api_key)])
+async def graph_health():
+    """Comprehensive graph health diagnostics for GOD-TIER visibility."""
+    cmd = '''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+from datetime import datetime, timedelta
+import json
+
+# === BASIC COUNTS ===
+topic_count = run_cypher('MATCH (t:Topic) RETURN count(t) as count')[0]['count']
+article_count = run_cypher('MATCH (a:Article) RETURN count(a) as count')[0]['count']
+about_count = run_cypher('MATCH ()-[r:ABOUT]->() RETURN count(r) as count')[0]['count']
+
+# === TOPIC-TOPIC RELATIONSHIPS ===
+influences = run_cypher('MATCH (:Topic)-[r:INFLUENCES]->(:Topic) RETURN count(r) as count')[0]['count']
+correlates = run_cypher('MATCH (:Topic)-[r:CORRELATES_WITH]->(:Topic) RETURN count(r) as count')[0]['count']
+
+# === ORPHAN DETECTION ===
+orphan_articles = run_cypher('MATCH (a:Article) WHERE NOT (a)-[:ABOUT]->(:Topic) RETURN count(a) as count')[0]['count']
+orphan_topics = run_cypher('MATCH (t:Topic) WHERE NOT (:Article)-[:ABOUT]->(t) RETURN count(t) as count')[0]['count']
+
+# === TOPIC DISTRIBUTION ===
+topic_distribution = run_cypher('''
+    MATCH (a:Article)-[:ABOUT]->(t:Topic)
+    WITH t.id as topic_id, t.name as topic_name, count(a) as article_count
+    RETURN topic_id, topic_name, article_count
+    ORDER BY article_count DESC
+''')
+
+# Get distribution stats
+article_counts = [t['article_count'] for t in topic_distribution]
+min_articles = min(article_counts) if article_counts else 0
+max_articles = max(article_counts) if article_counts else 0
+median_articles = sorted(article_counts)[len(article_counts)//2] if article_counts else 0
+
+# Topics with < 10 articles (starving)
+starving_topics = [t for t in topic_distribution if t['article_count'] < 10]
+
+# Topics with > 500 articles (saturated)
+saturated_topics = [t for t in topic_distribution if t['article_count'] > 500]
+
+# === ANALYSIS FRESHNESS ===
+stale_analysis = run_cypher('''
+    MATCH (t:Topic)
+    WHERE t.last_analyzed IS NOT NULL
+    AND t.last_analyzed < datetime() - duration('P7D')
+    RETURN t.id as topic_id, t.name as topic_name, t.last_analyzed as last_analyzed
+    ORDER BY t.last_analyzed ASC
+    LIMIT 10
+''')
+
+never_analyzed = run_cypher('''
+    MATCH (t:Topic)
+    WHERE t.last_analyzed IS NULL
+    RETURN t.id as topic_id, t.name as topic_name
+    LIMIT 20
+''')
+
+# === RECENT ACTIVITY ===
+articles_24h = run_cypher('''
+    MATCH (a:Article)
+    WHERE a.created_at > datetime() - duration('PT24H')
+    RETURN count(a) as count
+''')[0]['count']
+
+articles_7d = run_cypher('''
+    MATCH (a:Article)
+    WHERE a.created_at > datetime() - duration('P7D')
+    RETURN count(a) as count
+''')[0]['count']
+
+# === TOP 10 AND BOTTOM 10 TOPICS ===
+top_10 = topic_distribution[:10]
+bottom_10 = topic_distribution[-10:] if len(topic_distribution) > 10 else topic_distribution
+
+print(json.dumps({
+    'counts': {
+        'topics': topic_count,
+        'articles': article_count,
+        'about_relationships': about_count,
+        'influences_relationships': influences,
+        'correlates_relationships': correlates,
+        'total_topic_relationships': influences + correlates
+    },
+    'health': {
+        'orphan_articles': orphan_articles,
+        'orphan_topics': orphan_topics,
+        'starving_topics_count': len(starving_topics),
+        'saturated_topics_count': len(saturated_topics),
+        'stale_analysis_count': len(stale_analysis),
+        'never_analyzed_count': len(never_analyzed)
+    },
+    'distribution': {
+        'min_articles_per_topic': min_articles,
+        'max_articles_per_topic': max_articles,
+        'median_articles_per_topic': median_articles,
+        'avg_articles_per_topic': round(about_count / max(topic_count, 1), 1)
+    },
+    'activity': {
+        'articles_last_24h': articles_24h,
+        'articles_last_7d': articles_7d
+    },
+    'top_10_topics': top_10,
+    'bottom_10_topics': bottom_10,
+    'starving_topics': starving_topics[:10],
+    'stale_analysis': stale_analysis,
+    'never_analyzed': never_analyzed
+}, default=str))
+"'''
+    result = run_command(cmd, timeout=60)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
         except json.JSONDecodeError:
             return {"raw_output": result["stdout"], "success": True}
     return {"error": result["stderr"], "success": False}
