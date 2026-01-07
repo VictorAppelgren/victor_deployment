@@ -211,6 +211,118 @@ Ask yourself:
 
 ---
 
+## The Emotional Journey We Offer
+
+### Before Saga:
+- Confidence haunted by doubt
+- Good judgment undermined by "what if I missed something?"
+- Decisions made with partial information, hoping it's enough
+- Success feels lucky, not earned
+- Static analyses that expire the moment markets move
+
+### After Saga:
+- Conviction backed by completeness
+- Every angle checked means no second-guessing
+- Decisions made knowing what others will discover too late
+- Success feels inevitable — because you've done the work
+- Living intelligence that evolves with every new piece of information
+
+**The transformation isn't "better data" — it's certainty.**
+
+---
+
+## The Three Core Angles
+
+### 1. The Whole Picture Angle
+
+> **"The risks that hurt you aren't the ones you're watching. They're the ones you didn't know existed."**
+
+Your mental model is powerful — but it only includes what you've thought to include. Saga maps the connections you haven't made yet.
+
+- You see your positions
+- Saga sees what's building toward your positions
+- The difference is preparation vs. surprise
+
+**Key phrases:**
+- "See the whole picture — including the parts you didn't know to look for"
+- "The risks you don't know you're taking"
+- "Chain reactions building toward your portfolio"
+- "What's forming that you haven't seen?"
+
+**The emotional truth:** You're not failing because you're not smart enough. You're failing because no human can watch everything. Saga removes that limit.
+
+---
+
+### 2. The Living Analysis Angle
+
+> **"A great analysis isn't a document. It's a conversation that never stops."**
+
+Static reports are dead the moment they're written. Markets move. Events cascade. Yesterday's thesis needs today's validation.
+
+Saga keeps analyzing. Continuously. Your thesis is tested against every new piece of information, every day.
+
+**Key phrases:**
+- "Analysis that doesn't expire"
+- "Your thesis, stress-tested daily"
+- "Intelligence that evolves"
+- "A great analysis comes to life over time — over iteration and with the right tools"
+- "Not a snapshot. A living system."
+
+**The emotional truth:** You shouldn't have to wonder if your analysis is still valid. Saga keeps checking, so you don't have to.
+
+---
+
+### 3. The Conviction Angle (Expanded)
+
+> **"Confidence is 'I think I'm right.' Conviction is 'I know I've checked.'"**
+
+There's a gap between good judgment and total certainty. It's filled with doubt. Second-guessing. The nagging question: *What am I missing?*
+
+Saga closes that gap.
+
+**The progression:**
+- **Confidence:** "I believe this is the right call"
+- **Conviction:** "I've verified this at scale — every angle checked"
+
+**Key phrases:**
+- "From confidence to conviction"
+- "Complete conviction. Because you've earned it."
+- "Same judgment. Complete conviction."
+- "Permission to trust your judgment — because you've verified it"
+- "Be certain, not just confident"
+
+**The emotional promise:**
+- Walk into meetings without hidden doubt
+- Defend your thesis knowing you've checked what others haven't
+- Sleep better because nothing is building undetected
+
+> **"The best investors aren't the ones who are right most often. They're the ones who KNOW when they're right."**
+
+Conviction isn't arrogance. It's having done the work.
+
+---
+
+### 4. The Infrastructure Angle (For Investors/Technical Audiences)
+
+> **"We're not an AI wrapper. We're the infrastructure that lets frontier AI do what it does best."**
+
+For AI to deliver real economic value — the kind that justifies trillion-dollar investments — frontier models need three things:
+1. **Structured problems** (not vague queries)
+2. **Rich context** (not just raw data)
+3. **Time to work iteratively** (not one-shot responses)
+
+Saga provides all three. The knowledge graph gives AI structured context. The agent architecture enables sustained, iterative work over days and weeks. The domain expertise shapes problems worth solving.
+
+**Key phrases:**
+- "Infrastructure for frontier AI, not a wrapper around it"
+- "Better AI makes us more valuable, not less"
+- "The tool that lets LLMs truly shine"
+- "Most AI startups worry about the next model. We're building infrastructure that makes every next model more powerful."
+
+**Why this matters:** This positions Saga as complementary to AI progress, not threatened by it. As models improve, our value compounds.
+
+---
+
 ## Summary
 
 **Our voice is:** A brilliant peer explaining what they built — confident because it's real, humble because human judgment still matters.
@@ -219,7 +331,9 @@ Ask yourself:
 
 **Our differentiation is:** We respect human expertise. AI is the amplifier, not the replacement.
 
+**The emotional transformation:** From uncertainty to conviction. From hoping you've checked enough to knowing you have.
+
 ---
 
-*Last updated: 2024*
+*Last updated: 2025-01*
 *Use this guide for all external communications, landing pages, pitch decks, and marketing materials.*
