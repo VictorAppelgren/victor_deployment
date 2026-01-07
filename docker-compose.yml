@@ -173,6 +173,29 @@ services:
     networks:
       - network
 
+  # MCP Server (Remote Development Access for Claude Code)
+  mcp-server:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile
+    container_name: mcp-server
+    volumes:
+      # Docker socket for container management
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Read-only access to codebase
+      - /opt/saga-graph:/opt/saga-graph:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - network
+
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
