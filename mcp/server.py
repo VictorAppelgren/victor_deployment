@@ -271,6 +271,63 @@ class HideArticleRequest(BaseModel):
 
 
 # =============================================================================
+# NEW MODELS FOR GOD-TIER MCP TOOLS
+# =============================================================================
+
+class StrategyDetailRequest(BaseModel):
+    strategy_id: str = Field(..., description="Strategy ID to get details for")
+    username: str = Field(..., description="Username who owns the strategy")
+
+
+class ListStrategyFilesRequest(BaseModel):
+    username: str = Field(..., description="Username to list strategy files for")
+
+
+class RawFileRequest(BaseModel):
+    username: str = Field(..., description="Username")
+    filename: str = Field(..., description="Filename (e.g., 'strategy_123.json' or 'users.json')")
+
+
+class TopicAnalysisFullRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID")
+
+
+class TopicRelationshipsRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID")
+
+
+class TopicInfluenceMapRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID to map")
+    depth: int = Field(2, description="How many hops to traverse", ge=1, le=4)
+
+
+class TopicHistoryRequest(BaseModel):
+    topic_id: str = Field(..., description="Topic ID")
+    days: int = Field(30, description="Days of history to fetch")
+
+
+class ExplorationPathsRequest(BaseModel):
+    strategy_id: str = Field(..., description="Strategy ID")
+    username: str = Field(..., description="Username")
+
+
+class StrategyHealthCheckRequest(BaseModel):
+    strategy_id: str = Field(..., description="Strategy ID")
+    username: str = Field(..., description="Username")
+
+
+class ArticleDetailRequest(BaseModel):
+    article_id: str = Field(..., description="Article ID")
+
+
+class SearchArticlesRequest(BaseModel):
+    query: str = Field(..., description="Search query")
+    topic_id: Optional[str] = Field(None, description="Filter by topic")
+    since: Optional[str] = Field(None, description="ISO date string, e.g., 2024-01-01")
+    limit: int = Field(20, description="Max results", ge=1, le=100)
+
+
+# =============================================================================
 # MCP PROTOCOL (JSON-RPC 2.0) - Native Claude Code Integration
 # =============================================================================
 
@@ -537,6 +594,253 @@ MCP_TOOLS = [
             "properties": {},
             "required": []
         }
+    },
+    # =============================================================================
+    # GOD-TIER TOOLS - Expert Strategy Analysis & System Visibility
+    # =============================================================================
+    # === STRATEGY DETAIL TOOLS ===
+    {
+        "name": "strategy_detail",
+        "description": "Get FULL strategy details including thesis text, position, target, is_default flag, timestamps - everything needed to understand a strategy",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username who owns the strategy"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    {
+        "name": "list_strategy_files",
+        "description": "List all strategy JSON files for a user with metadata (filename, is_default, asset, created_at)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username to list strategies for"}
+            },
+            "required": ["username"]
+        }
+    },
+    {
+        "name": "raw_strategy_file",
+        "description": "Read raw strategy JSON file - bypass API, see exactly what's stored on disk",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID (will read strategy_{id}.json)"}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    {
+        "name": "strategy_conversations",
+        "description": "Get conversation history for a strategy",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"},
+                "limit": {"type": "integer", "description": "Max conversations to return", "default": 10}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    # === TOPIC ANALYSIS TOOLS ===
+    {
+        "name": "topic_analysis_full",
+        "description": "Get ALL 4 analysis timeframes for a topic: fundamental (6+ months), medium (3-6 mo), current (this week), and drivers",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "Topic ID"}
+            },
+            "required": ["topic_id"]
+        }
+    },
+    {
+        "name": "topic_relationships",
+        "description": "Get all relationships for a topic - INFLUENCES, CORRELATES_WITH, HEDGES, PEERS - with strength and mechanisms",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "Topic ID"}
+            },
+            "required": ["topic_id"]
+        }
+    },
+    {
+        "name": "topic_influence_map",
+        "description": "Get full influence graph for a topic - what it affects, what affects it, N hops deep for chain reaction analysis",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_id": {"type": "string", "description": "Topic ID"},
+                "depth": {"type": "integer", "description": "How many hops to traverse (1-4)", "default": 2}
+            },
+            "required": ["topic_id"]
+        }
+    },
+    {
+        "name": "topic_coverage_gaps",
+        "description": "Find topics with stale/missing analysis - identify where the system needs attention",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "stale_days": {"type": "integer", "description": "Consider analysis stale after N days", "default": 7}
+            },
+            "required": []
+        }
+    },
+    # === PIPELINE & AGENT TOOLS ===
+    {
+        "name": "topic_mapping_result",
+        "description": "See how a strategy was mapped to topics - which topics, why, confidence - understand Topic Mapper output",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    {
+        "name": "exploration_paths",
+        "description": "Get chain reactions discovered by Exploration Agent for a strategy - the 3-6 hop connections",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    {
+        "name": "agent_outputs",
+        "description": "Get raw outputs from specific agents (risk_assessor, opportunity_finder, exploration, strategy_writer) for a strategy",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"},
+                "agent": {"type": "string", "description": "Agent name (optional - returns all if not specified)", "enum": ["risk_assessor", "opportunity_finder", "exploration", "strategy_writer", "topic_mapper"]}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    # === WORKER & PIPELINE MONITORING ===
+    {
+        "name": "worker_status",
+        "description": "Status of all workers (ingest, write, sources) with last run times, success rates",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "failed_jobs",
+        "description": "Recent failures in any pipeline (ingestion, analysis, strategy writing) - catch issues early",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer", "description": "Look back N hours", "default": 24}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "processing_backlog",
+        "description": "What's waiting to be processed - articles to classify, topics to analyze, strategies to write",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "ingestion_stats",
+        "description": "Article ingestion stats - count by source, by day, success rate, recent trends",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Days of history", "default": 7}
+            },
+            "required": []
+        }
+    },
+    # === ARTICLE TOOLS ===
+    {
+        "name": "article_detail",
+        "description": "Get full article content + classification + topic assignments + importance scores",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "article_id": {"type": "string", "description": "Article ID"}
+            },
+            "required": ["article_id"]
+        }
+    },
+    {
+        "name": "search_articles",
+        "description": "Search articles by keyword, date range, topic - find relevant content",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "topic_id": {"type": "string", "description": "Filter by topic (optional)"},
+                "since": {"type": "string", "description": "ISO date (e.g., 2024-01-01)"},
+                "limit": {"type": "integer", "description": "Max results", "default": 20}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "source_stats",
+        "description": "Article counts by source, quality indicators, recent trends - understand content quality",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Days of history", "default": 7}
+            },
+            "required": []
+        }
+    },
+    # === CROSS-CUTTING ANALYSIS ===
+    {
+        "name": "strategy_health_check",
+        "description": "Diagnose why a strategy might be getting poor analysis - check topic mapping, analysis freshness, coverage gaps",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Username"},
+                "strategy_id": {"type": "string", "description": "Strategy ID"}
+            },
+            "required": ["username", "strategy_id"]
+        }
+    },
+    {
+        "name": "cross_strategy_insights",
+        "description": "Find overlapping topics/risks across ALL strategies - identify concentration risks, correlated exposures",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "system_activity_log",
+        "description": "Recent system activity - analyses run, strategies updated, articles ingested, errors",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer", "description": "Look back N hours", "default": 24}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -791,6 +1095,149 @@ async def execute_mcp_tool(tool_name: str, arguments: dict) -> dict:
 
     elif tool_name == "daily_stats":
         response = await daily_stats()
+        return response
+
+    # =============================================================================
+    # GOD-TIER TOOLS - New handlers
+    # =============================================================================
+
+    # === STRATEGY DETAIL TOOLS ===
+    elif tool_name == "strategy_detail":
+        response = await strategy_detail(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id")
+        )
+        return response
+
+    elif tool_name == "list_strategy_files":
+        response = await list_strategy_files(
+            username=arguments.get("username")
+        )
+        return response
+
+    elif tool_name == "raw_strategy_file":
+        response = await raw_strategy_file(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id")
+        )
+        return response
+
+    elif tool_name == "strategy_conversations":
+        response = await strategy_conversations(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id"),
+            limit=arguments.get("limit", 10)
+        )
+        return response
+
+    # === TOPIC ANALYSIS TOOLS ===
+    elif tool_name == "topic_analysis_full":
+        response = await topic_analysis_full(
+            topic_id=arguments.get("topic_id")
+        )
+        return response
+
+    elif tool_name == "topic_relationships":
+        response = await topic_relationships(
+            topic_id=arguments.get("topic_id")
+        )
+        return response
+
+    elif tool_name == "topic_influence_map":
+        response = await topic_influence_map(
+            topic_id=arguments.get("topic_id"),
+            depth=arguments.get("depth", 2)
+        )
+        return response
+
+    elif tool_name == "topic_coverage_gaps":
+        response = await topic_coverage_gaps(
+            stale_days=arguments.get("stale_days", 7)
+        )
+        return response
+
+    # === PIPELINE & AGENT TOOLS ===
+    elif tool_name == "topic_mapping_result":
+        response = await topic_mapping_result(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id")
+        )
+        return response
+
+    elif tool_name == "exploration_paths":
+        response = await exploration_paths(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id")
+        )
+        return response
+
+    elif tool_name == "agent_outputs":
+        response = await agent_outputs(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id"),
+            agent=arguments.get("agent")
+        )
+        return response
+
+    # === WORKER & PIPELINE MONITORING ===
+    elif tool_name == "worker_status":
+        response = await worker_status()
+        return response
+
+    elif tool_name == "failed_jobs":
+        response = await failed_jobs(
+            hours=arguments.get("hours", 24)
+        )
+        return response
+
+    elif tool_name == "processing_backlog":
+        response = await processing_backlog()
+        return response
+
+    elif tool_name == "ingestion_stats":
+        response = await ingestion_stats(
+            days=arguments.get("days", 7)
+        )
+        return response
+
+    # === ARTICLE TOOLS ===
+    elif tool_name == "article_detail":
+        response = await article_detail(
+            article_id=arguments.get("article_id")
+        )
+        return response
+
+    elif tool_name == "search_articles":
+        response = await search_articles_tool(
+            query=arguments.get("query"),
+            topic_id=arguments.get("topic_id"),
+            since=arguments.get("since"),
+            limit=arguments.get("limit", 20)
+        )
+        return response
+
+    elif tool_name == "source_stats":
+        response = await source_stats(
+            days=arguments.get("days", 7)
+        )
+        return response
+
+    # === CROSS-CUTTING ANALYSIS ===
+    elif tool_name == "strategy_health_check":
+        response = await strategy_health_check(
+            username=arguments.get("username"),
+            strategy_id=arguments.get("strategy_id")
+        )
+        return response
+
+    elif tool_name == "cross_strategy_insights":
+        response = await cross_strategy_insights()
+        return response
+
+    elif tool_name == "system_activity_log":
+        response = await system_activity_log(
+            hours=arguments.get("hours", 24)
+        )
         return response
 
     else:
@@ -1847,6 +2294,922 @@ trigger_reanalysis('{req.topic_id}', force={req.force})
         "triggered": True,
         "force": req.force,
         "note": "Analysis running in background. Check logs for progress."
+    }
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Strategy Detail Endpoints
+# =============================================================================
+
+@app.get("/mcp/tools/strategy_detail", dependencies=[Depends(verify_api_key)])
+async def strategy_detail(username: str, strategy_id: str):
+    """Get FULL strategy details including thesis, position, target, is_default, timestamps."""
+    # Read raw file from saga-be users directory
+    file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
+
+    try:
+        result = run_command(f"cat '{file_path}'", timeout=10)
+        if result["success"] and result["stdout"].strip():
+            data = json.loads(result["stdout"])
+            return {
+                "strategy_id": strategy_id,
+                "username": username,
+                "strategy": data,
+                "file_path": file_path
+            }
+        else:
+            return {"error": f"Strategy file not found: {file_path}", "success": False}
+    except json.JSONDecodeError as e:
+        return {"error": f"Invalid JSON in strategy file: {e}", "raw": result["stdout"][:500]}
+
+
+@app.get("/mcp/tools/list_strategy_files", dependencies=[Depends(verify_api_key)])
+async def list_strategy_files(username: str):
+    """List all strategy JSON files for a user with metadata."""
+    user_dir = f"/opt/saga-graph/saga-be/users/{username}"
+
+    # List all strategy files
+    result = run_command(f"ls -la {user_dir}/strategy_*.json 2>/dev/null", timeout=10)
+
+    if not result["success"] or not result["stdout"].strip():
+        return {"username": username, "strategies": [], "count": 0, "note": "No strategy files found"}
+
+    # Parse each strategy file to get metadata
+    strategies = []
+    for line in result["stdout"].strip().split("\n"):
+        if "strategy_" in line:
+            parts = line.split()
+            filename = parts[-1] if parts else None
+            if filename:
+                # Read the file to get metadata
+                cat_result = run_command(f"cat '{filename}'", timeout=5)
+                if cat_result["success"]:
+                    try:
+                        data = json.loads(cat_result["stdout"])
+                        strategies.append({
+                            "filename": os.path.basename(filename),
+                            "strategy_id": data.get("id"),
+                            "asset": data.get("asset", {}).get("primary"),
+                            "is_default": data.get("is_default", False),
+                            "created_at": data.get("created_at"),
+                            "updated_at": data.get("updated_at"),
+                            "thesis_preview": (data.get("user_input", {}).get("strategy_text", "")[:100] + "...")
+                        })
+                    except json.JSONDecodeError:
+                        strategies.append({"filename": os.path.basename(filename), "error": "Invalid JSON"})
+
+    return {
+        "username": username,
+        "strategies": strategies,
+        "count": len(strategies)
+    }
+
+
+@app.get("/mcp/tools/raw_strategy_file", dependencies=[Depends(verify_api_key)])
+async def raw_strategy_file(username: str, strategy_id: str):
+    """Read raw strategy JSON file - exactly what's on disk."""
+    file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
+
+    result = run_command(f"cat '{file_path}'", timeout=10)
+
+    if result["success"] and result["stdout"].strip():
+        try:
+            data = json.loads(result["stdout"])
+            return {
+                "username": username,
+                "strategy_id": strategy_id,
+                "file_path": file_path,
+                "raw_content": data
+            }
+        except json.JSONDecodeError:
+            return {"error": "Invalid JSON", "raw_content": result["stdout"][:2000]}
+    return {"error": f"File not found: {file_path}", "success": False}
+
+
+@app.get("/mcp/tools/strategy_conversations", dependencies=[Depends(verify_api_key)])
+async def strategy_conversations(username: str, strategy_id: str, limit: int = 10):
+    """Get conversation history for a strategy."""
+    conv_dir = f"/opt/saga-graph/saga-be/users/{username}/conversations"
+
+    # List conversation files for this strategy
+    result = run_command(f"ls -t {conv_dir}/*{strategy_id}*.json 2>/dev/null | head -n {limit}", timeout=10)
+
+    if not result["success"] or not result["stdout"].strip():
+        # Try listing all conversations and filtering
+        result = run_command(f"ls -t {conv_dir}/*.json 2>/dev/null | head -n 50", timeout=10)
+
+    conversations = []
+    for filepath in result["stdout"].strip().split("\n"):
+        if filepath:
+            cat_result = run_command(f"cat '{filepath}'", timeout=5)
+            if cat_result["success"]:
+                try:
+                    data = json.loads(cat_result["stdout"])
+                    # Check if this conversation is for the target strategy
+                    if strategy_id in filepath or data.get("strategy_id") == strategy_id:
+                        conversations.append({
+                            "filename": os.path.basename(filepath),
+                            "created_at": data.get("created_at"),
+                            "message_count": len(data.get("messages", [])),
+                            "messages": data.get("messages", [])[-5:]  # Last 5 messages as preview
+                        })
+                except json.JSONDecodeError:
+                    pass
+
+    return {
+        "username": username,
+        "strategy_id": strategy_id,
+        "conversations": conversations[:limit],
+        "count": len(conversations)
+    }
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Topic Analysis Endpoints
+# =============================================================================
+
+@app.get("/mcp/tools/topic_analysis_full", dependencies=[Depends(verify_api_key)])
+async def topic_analysis_full(topic_id: str):
+    """Get ALL 4 analysis timeframes for a topic."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+query = '''
+MATCH (t:Topic {{id: '{topic_id}'}})
+RETURN t.id as id,
+       t.name as name,
+       t.type as type,
+       t.category as category,
+       t.fundamental_analysis as fundamental,
+       t.medium_analysis as medium,
+       t.current_analysis as current,
+       t.drivers as drivers,
+       t.last_analyzed as last_analyzed,
+       t.last_updated as last_updated,
+       t.created_at as created_at
+'''
+results = run_cypher(query)
+if results:
+    print(json.dumps(results[0], default=str))
+else:
+    print(json.dumps({{'error': 'Topic not found'}}))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {
+                "topic_id": topic_id,
+                "analysis": {
+                    "fundamental": data.get("fundamental"),
+                    "medium": data.get("medium"),
+                    "current": data.get("current"),
+                    "drivers": data.get("drivers")
+                },
+                "metadata": {
+                    "name": data.get("name"),
+                    "type": data.get("type"),
+                    "category": data.get("category"),
+                    "last_analyzed": data.get("last_analyzed"),
+                    "last_updated": data.get("last_updated")
+                }
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/topic_relationships", dependencies=[Depends(verify_api_key)])
+async def topic_relationships(topic_id: str):
+    """Get all relationships for a topic with strength and mechanisms."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Get outgoing relationships
+outgoing = run_cypher('''
+MATCH (t:Topic {{id: '{topic_id}'}})-[r]->(t2:Topic)
+RETURN type(r) as rel_type, t2.id as target_id, t2.name as target_name,
+       r.strength as strength, r.mechanism as mechanism
+''')
+
+# Get incoming relationships
+incoming = run_cypher('''
+MATCH (t2:Topic)-[r]->(t:Topic {{id: '{topic_id}'}})
+RETURN type(r) as rel_type, t2.id as source_id, t2.name as source_name,
+       r.strength as strength, r.mechanism as mechanism
+''')
+
+print(json.dumps({{'outgoing': outgoing, 'incoming': incoming}}, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            # Organize by relationship type
+            influences_out = [r for r in data.get("outgoing", []) if r.get("rel_type") == "INFLUENCES"]
+            influences_in = [r for r in data.get("incoming", []) if r.get("rel_type") == "INFLUENCES"]
+            correlates = [r for r in data.get("outgoing", []) + data.get("incoming", []) if r.get("rel_type") == "CORRELATES_WITH"]
+            hedges = [r for r in data.get("outgoing", []) + data.get("incoming", []) if r.get("rel_type") == "HEDGES"]
+            peers = [r for r in data.get("outgoing", []) + data.get("incoming", []) if r.get("rel_type") == "PEERS"]
+
+            return {
+                "topic_id": topic_id,
+                "relationships": {
+                    "influences": influences_out,
+                    "influenced_by": influences_in,
+                    "correlates_with": correlates,
+                    "hedges": hedges,
+                    "peers": peers
+                },
+                "counts": {
+                    "total_outgoing": len(data.get("outgoing", [])),
+                    "total_incoming": len(data.get("incoming", []))
+                }
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/topic_influence_map", dependencies=[Depends(verify_api_key)])
+async def topic_influence_map(topic_id: str, depth: int = 2):
+    """Get full influence graph for a topic - N hops deep."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Get multi-hop outward influence (what this topic affects)
+outward = run_cypher('''
+MATCH path = (start:Topic {{id: '{topic_id}'}})-[:INFLUENCES*1..{depth}]->(end:Topic)
+WITH nodes(path) as topics, relationships(path) as rels
+UNWIND range(0, size(rels)-1) as idx
+RETURN topics[idx].id as from_id, topics[idx].name as from_name,
+       topics[idx+1].id as to_id, topics[idx+1].name as to_name,
+       rels[idx].strength as strength, rels[idx].mechanism as mechanism,
+       idx + 1 as hop
+''')
+
+# Get multi-hop inward influence (what affects this topic)
+inward = run_cypher('''
+MATCH path = (start:Topic)-[:INFLUENCES*1..{depth}]->(end:Topic {{id: '{topic_id}'}})
+WITH nodes(path) as topics, relationships(path) as rels
+UNWIND range(0, size(rels)-1) as idx
+RETURN topics[idx].id as from_id, topics[idx].name as from_name,
+       topics[idx+1].id as to_id, topics[idx+1].name as to_name,
+       rels[idx].strength as strength, rels[idx].mechanism as mechanism,
+       idx + 1 as hop
+''')
+
+print(json.dumps({{'influences_outward': outward, 'influenced_by': inward}}, default=str))
+"'''
+    result = run_command(cmd, timeout=60)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            return {
+                "topic_id": topic_id,
+                "depth": depth,
+                "influence_map": data,
+                "summary": {
+                    "outward_connections": len(data.get("influences_outward", [])),
+                    "inward_connections": len(data.get("influenced_by", []))
+                }
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/topic_coverage_gaps", dependencies=[Depends(verify_api_key)])
+async def topic_coverage_gaps(stale_days: int = 7):
+    """Find topics with stale/missing analysis."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Topics never analyzed
+never_analyzed = run_cypher('''
+MATCH (t:Topic)
+WHERE t.fundamental_analysis IS NULL AND t.current_analysis IS NULL
+OPTIONAL MATCH (a:Article)-[:ABOUT]->(t)
+RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count
+ORDER BY article_count DESC
+''')
+
+# Topics with stale analysis
+stale = run_cypher('''
+MATCH (t:Topic)
+WHERE t.last_analyzed IS NOT NULL
+AND t.last_analyzed < datetime() - duration(\"P{stale_days}D\")
+OPTIONAL MATCH (a:Article)-[:ABOUT]->(t)
+WITH t, count(a) as article_count
+RETURN t.id as topic_id, t.name as topic_name, t.last_analyzed as last_analyzed, article_count
+ORDER BY t.last_analyzed ASC
+''')
+
+# Topics with few articles (starving)
+starving = run_cypher('''
+MATCH (t:Topic)
+OPTIONAL MATCH (a:Article)-[:ABOUT]->(t)
+WITH t, count(a) as article_count
+WHERE article_count < 5
+RETURN t.id as topic_id, t.name as topic_name, article_count
+ORDER BY article_count ASC
+''')
+
+print(json.dumps({{
+    'never_analyzed': never_analyzed,
+    'stale_analysis': stale,
+    'starving_topics': starving,
+    'summary': {{
+        'never_analyzed_count': len(never_analyzed),
+        'stale_count': len(stale),
+        'starving_count': len(starving)
+    }}
+}}, default=str))
+"'''
+    result = run_command(cmd, timeout=60)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Pipeline & Agent Endpoints
+# =============================================================================
+
+@app.get("/mcp/tools/topic_mapping_result", dependencies=[Depends(verify_api_key)])
+async def topic_mapping_result(username: str, strategy_id: str):
+    """See how a strategy was mapped to topics."""
+    # Get strategy topics from API
+    url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}/topics"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            topics_data = json.loads(result["stdout"])
+
+            # Also get the strategy to show the thesis
+            strategy_url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}"
+            strategy_result = run_command(f"curl -s '{strategy_url}'", timeout=10)
+            strategy_data = {}
+            if strategy_result["success"]:
+                try:
+                    strategy_data = json.loads(strategy_result["stdout"])
+                except:
+                    pass
+
+            return {
+                "strategy_id": strategy_id,
+                "username": username,
+                "thesis_preview": strategy_data.get("user_input", {}).get("strategy_text", "")[:200] + "...",
+                "topic_mapping": topics_data,
+                "topic_count": len(topics_data) if isinstance(topics_data, list) else 0
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/exploration_paths", dependencies=[Depends(verify_api_key)])
+async def exploration_paths(username: str, strategy_id: str):
+    """Get chain reactions discovered by Exploration Agent for a strategy."""
+    # Get strategy analysis which contains exploration results
+    url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}/analysis"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+            # Extract chain reactions from analysis if present
+            chain_reactions = data.get("chain_reactions", [])
+            exploration = data.get("exploration", {})
+
+            return {
+                "strategy_id": strategy_id,
+                "username": username,
+                "chain_reactions": chain_reactions,
+                "exploration_output": exploration,
+                "note": "Chain reactions are multi-hop influence paths discovered by the Exploration Agent"
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/agent_outputs", dependencies=[Depends(verify_api_key)])
+async def agent_outputs(username: str, strategy_id: str, agent: str = None):
+    """Get raw outputs from specific agents for a strategy."""
+    url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}/analysis"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"]:
+        try:
+            data = json.loads(result["stdout"])
+
+            # Extract agent-specific outputs
+            outputs = {}
+            if not agent or agent == "risk_assessor":
+                outputs["risk_assessor"] = data.get("risks", data.get("risk_assessment", {}))
+            if not agent or agent == "opportunity_finder":
+                outputs["opportunity_finder"] = data.get("opportunities", data.get("opportunity_assessment", {}))
+            if not agent or agent == "exploration":
+                outputs["exploration"] = data.get("exploration", data.get("chain_reactions", {}))
+            if not agent or agent == "strategy_writer":
+                outputs["strategy_writer"] = data.get("summary", data.get("strategy_summary", {}))
+            if not agent or agent == "topic_mapper":
+                outputs["topic_mapper"] = data.get("topics", data.get("topic_mapping", {}))
+
+            return {
+                "strategy_id": strategy_id,
+                "username": username,
+                "agent_filter": agent,
+                "outputs": outputs,
+                "generated_at": data.get("generated_at", data.get("updated_at"))
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"]}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Worker & Pipeline Monitoring
+# =============================================================================
+
+@app.get("/mcp/tools/worker_status", dependencies=[Depends(verify_api_key)])
+async def worker_status():
+    """Status of all workers with last run times."""
+    workers = {}
+
+    # Check each worker service
+    for service in ["worker-main", "worker-sources"]:
+        # Get container status
+        status_result = run_command(
+            f"docker inspect {service} --format '{{{{.State.Status}}}} {{{{.State.StartedAt}}}}'",
+            timeout=5
+        )
+
+        # Get recent logs for last activity
+        logs_result = run_command(
+            f"docker logs --tail 50 {service} 2>&1 | grep -E '(SUCCESS|ERROR|Started|Completed|Processing)' | tail -5",
+            timeout=10
+        )
+
+        workers[service] = {
+            "status": status_result["stdout"].split()[0] if status_result["success"] else "unknown",
+            "started_at": status_result["stdout"].split()[1] if status_result["success"] and len(status_result["stdout"].split()) > 1 else "unknown",
+            "recent_activity": logs_result["stdout"].strip().split("\n") if logs_result["success"] else []
+        }
+
+    # Get WORKER_MODE from environment
+    mode_result = run_command("docker exec worker-main printenv WORKER_MODE 2>/dev/null", timeout=5)
+
+    return {
+        "workers": workers,
+        "worker_mode": mode_result["stdout"].strip() if mode_result["success"] else "unknown",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/mcp/tools/failed_jobs", dependencies=[Depends(verify_api_key)])
+async def failed_jobs(hours: int = 24):
+    """Recent failures in any pipeline."""
+    failures = []
+
+    # Search for errors in each service
+    for service in ["worker-main", "worker-sources", "apis"]:
+        result = run_command(
+            f"docker logs --since {hours}h {service} 2>&1 | grep -iE '(ERROR|Exception|FAILED|Traceback)' | tail -20",
+            timeout=30
+        )
+
+        if result["success"] and result["stdout"].strip():
+            for line in result["stdout"].strip().split("\n"):
+                if line:
+                    failures.append({
+                        "service": service,
+                        "message": line[:500],
+                        "type": "error"
+                    })
+
+    return {
+        "hours_searched": hours,
+        "failures": failures,
+        "total_count": len(failures),
+        "summary": {
+            "by_service": {s: len([f for f in failures if f["service"] == s]) for s in ["worker-main", "worker-sources", "apis"]}
+        }
+    }
+
+
+@app.get("/mcp/tools/processing_backlog", dependencies=[Depends(verify_api_key)])
+async def processing_backlog():
+    """What's waiting to be processed."""
+    cmd = '''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Articles pending topic assignment
+pending_topics = run_cypher('''
+MATCH (a:Article)
+WHERE NOT (a)-[:ABOUT]->(:Topic)
+AND a.created_at > datetime() - duration(\"P7D\")
+RETURN count(a) as count
+''')[0]['count']
+
+# Topics pending analysis refresh
+pending_analysis = run_cypher('''
+MATCH (t:Topic)
+WHERE t.last_analyzed IS NULL
+   OR t.last_analyzed < datetime() - duration(\"P7D\")
+RETURN count(t) as count
+''')[0]['count']
+
+# Recent articles not yet processed
+recent_unprocessed = run_cypher('''
+MATCH (a:Article)
+WHERE a.created_at > datetime() - duration(\"PT6H\")
+AND (a.processed IS NULL OR a.processed = false)
+RETURN count(a) as count
+''')[0]['count']
+
+print(json.dumps({
+    'pending_topic_assignment': pending_topics,
+    'pending_analysis_refresh': pending_analysis,
+    'recent_unprocessed': recent_unprocessed,
+    'health': 'nominal' if (pending_topics < 100 and pending_analysis < 20) else 'backlogged'
+}, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/ingestion_stats", dependencies=[Depends(verify_api_key)])
+async def ingestion_stats(days: int = 7):
+    """Article ingestion stats by source and day."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Articles by source
+by_source = run_cypher('''
+MATCH (a:Article)
+WHERE a.created_at > datetime() - duration(\"P{days}D\")
+RETURN a.source as source, count(a) as count
+ORDER BY count DESC
+''')
+
+# Articles by day
+by_day = run_cypher('''
+MATCH (a:Article)
+WHERE a.created_at > datetime() - duration(\"P{days}D\")
+RETURN date(a.created_at) as day, count(a) as count
+ORDER BY day DESC
+''')
+
+# Total recent
+total = run_cypher('''
+MATCH (a:Article)
+WHERE a.created_at > datetime() - duration(\"P{days}D\")
+RETURN count(a) as total
+''')[0]['total']
+
+print(json.dumps({{
+    'by_source': by_source,
+    'by_day': by_day,
+    'total_articles': total,
+    'days': {days},
+    'avg_per_day': round(total / {days}, 1)
+}}, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Article Endpoints
+# =============================================================================
+
+@app.get("/mcp/tools/article_detail", dependencies=[Depends(verify_api_key)])
+async def article_detail(article_id: str):
+    """Get full article content + classification + topic assignments."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+# Get article with topic relationships
+query = '''
+MATCH (a:Article {{id: '{article_id}'}})
+OPTIONAL MATCH (a)-[r:ABOUT]->(t:Topic)
+RETURN a.id as id, a.title as title, a.source as source, a.url as url,
+       a.content as content, a.summary as summary,
+       a.published_at as published_at, a.created_at as created_at,
+       a.classification as classification, a.category as category,
+       collect({{
+           topic_id: t.id,
+           topic_name: t.name,
+           importance_risk: r.importance_risk,
+           importance_opportunity: r.importance_opportunity,
+           importance_trend: r.importance_trend,
+           importance_catalyst: r.importance_catalyst,
+           motivation: r.motivation,
+           timeframe: r.timeframe
+       }}) as topics
+'''
+results = run_cypher(query)
+if results:
+    print(json.dumps(results[0], default=str))
+else:
+    print(json.dumps({{'error': 'Article not found'}}))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/search_articles", dependencies=[Depends(verify_api_key)])
+async def search_articles_tool(query: str, topic_id: str = None, since: str = None, limit: int = 20):
+    """Search articles by keyword, date range, topic."""
+    # Build cypher query
+    where_clauses = [f"a.title =~ '(?i).*{query}.*' OR a.content =~ '(?i).*{query}.*'"]
+
+    if topic_id:
+        topic_match = f"MATCH (a)-[:ABOUT]->(t:Topic {{id: '{topic_id}'}})"
+    else:
+        topic_match = "OPTIONAL MATCH (a)-[:ABOUT]->(t:Topic)"
+
+    if since:
+        where_clauses.append(f"a.published_at >= '{since}'")
+
+    where_clause = " AND ".join(where_clauses)
+
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+query = '''
+MATCH (a:Article)
+{topic_match}
+WHERE {where_clause}
+RETURN DISTINCT a.id as id, a.title as title, a.source as source,
+       a.published_at as published_at, a.summary as summary,
+       collect(t.id) as topics
+ORDER BY a.published_at DESC
+LIMIT {limit}
+'''
+results = run_cypher(query)
+print(json.dumps(results, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            articles = json.loads(result["stdout"])
+            return {
+                "query": query,
+                "topic_filter": topic_id,
+                "since": since,
+                "articles": articles,
+                "count": len(articles)
+            }
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+@app.get("/mcp/tools/source_stats", dependencies=[Depends(verify_api_key)])
+async def source_stats(days: int = 7):
+    """Article counts by source with quality indicators."""
+    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+from src.graph.neo4j_client import run_cypher
+import json
+
+stats = run_cypher('''
+MATCH (a:Article)
+WHERE a.created_at > datetime() - duration(\"P{days}D\")
+WITH a.source as source, count(a) as article_count
+OPTIONAL MATCH (a2:Article {{source: source}})-[r:ABOUT]->(t:Topic)
+WHERE a2.created_at > datetime() - duration(\"P{days}D\")
+WITH source, article_count,
+     avg(COALESCE(r.importance_risk, 0) + COALESCE(r.importance_opportunity, 0)) as avg_importance
+RETURN source, article_count, round(avg_importance * 100) / 100 as avg_importance
+ORDER BY article_count DESC
+''')
+
+print(json.dumps({{'sources': stats, 'days': {days}}}, default=str))
+"'''
+    result = run_command(cmd, timeout=30)
+
+    if result["success"]:
+        try:
+            return json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            return {"raw_output": result["stdout"], "success": True}
+    return {"error": result["stderr"], "success": False}
+
+
+# =============================================================================
+# GOD-TIER TOOLS - Cross-Cutting Analysis
+# =============================================================================
+
+@app.get("/mcp/tools/strategy_health_check", dependencies=[Depends(verify_api_key)])
+async def strategy_health_check(username: str, strategy_id: str):
+    """Diagnose why a strategy might be getting poor analysis."""
+    issues = []
+    strengths = []
+
+    # 1. Get strategy details
+    strategy_url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}"
+    strategy_result = run_command(f"curl -s '{strategy_url}'", timeout=10)
+    strategy_data = {}
+    if strategy_result["success"]:
+        try:
+            strategy_data = json.loads(strategy_result["stdout"])
+        except:
+            issues.append({"severity": "high", "category": "data", "issue": "Cannot read strategy data"})
+
+    # 2. Get topic mapping
+    topics_url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}/topics"
+    topics_result = run_command(f"curl -s '{topics_url}'", timeout=10)
+    topics = []
+    if topics_result["success"]:
+        try:
+            topics = json.loads(topics_result["stdout"])
+            if isinstance(topics, list):
+                if len(topics) < 5:
+                    issues.append({
+                        "severity": "high",
+                        "category": "topic_mapping",
+                        "issue": f"Only {len(topics)} topics mapped (optimal: 10-15)",
+                        "suggestion": "Strategy thesis may lack explicit driver mechanisms"
+                    })
+                elif len(topics) >= 10:
+                    strengths.append("Good topic coverage (10+ topics mapped)")
+        except:
+            pass
+
+    # 3. Check thesis quality
+    thesis = strategy_data.get("user_input", {}).get("strategy_text", "")
+    if thesis:
+        # Check for causal mechanisms
+        causal_indicators = ["→", "because", "leads to", "causes", "drives", "if", "then", "when"]
+        has_causality = any(ind in thesis.lower() for ind in causal_indicators)
+        if not has_causality:
+            issues.append({
+                "severity": "medium",
+                "category": "thesis_quality",
+                "issue": "Thesis lacks explicit causal mechanisms",
+                "suggestion": "Add transmission paths like 'A → B via X'"
+            })
+        else:
+            strengths.append("Thesis contains causal mechanisms")
+
+        # Check for invalidation signals
+        invalidation_indicators = ["dies if", "wrong if", "risk:", "breaks if", "invalid"]
+        has_invalidation = any(ind in thesis.lower() for ind in invalidation_indicators)
+        if not has_invalidation:
+            issues.append({
+                "severity": "low",
+                "category": "thesis_quality",
+                "issue": "No thesis invalidation signals detected",
+                "suggestion": "Add 'thesis dies if...' to help Risk Assessor"
+            })
+        else:
+            strengths.append("Thesis includes invalidation signals")
+
+    # 4. Calculate health score
+    high_issues = len([i for i in issues if i["severity"] == "high"])
+    medium_issues = len([i for i in issues if i["severity"] == "medium"])
+    low_issues = len([i for i in issues if i["severity"] == "low"])
+    health_score = max(0, 1.0 - (high_issues * 0.3) - (medium_issues * 0.15) - (low_issues * 0.05))
+
+    return {
+        "strategy_id": strategy_id,
+        "username": username,
+        "health_score": round(health_score, 2),
+        "issues": issues,
+        "strengths": strengths,
+        "topic_count": len(topics) if isinstance(topics, list) else 0,
+        "thesis_length": len(thesis)
+    }
+
+
+@app.get("/mcp/tools/cross_strategy_insights", dependencies=[Depends(verify_api_key)])
+async def cross_strategy_insights():
+    """Find overlapping topics/risks across ALL strategies."""
+    # Get all users and their strategies
+    users_result = run_command("curl -s http://apis:8000/api/users", timeout=10)
+
+    all_topics = {}
+    all_strategies = []
+
+    if users_result["success"]:
+        try:
+            users = json.loads(users_result["stdout"])
+            for user in users if isinstance(users, list) else []:
+                username = user.get("username")
+                if not username:
+                    continue
+
+                # Get strategies for this user
+                strat_result = run_command(f"curl -s 'http://apis:8000/api/users/{username}/strategies'", timeout=10)
+                if strat_result["success"]:
+                    try:
+                        strategies = json.loads(strat_result["stdout"])
+                        for strat in strategies if isinstance(strategies, list) else []:
+                            strat_id = strat.get("id")
+                            strat_name = strat.get("asset", {}).get("primary", strat_id)
+                            all_strategies.append({"username": username, "id": strat_id, "name": strat_name})
+
+                            # Get topics for this strategy
+                            topics_result = run_command(f"curl -s 'http://apis:8000/api/users/{username}/strategies/{strat_id}/topics'", timeout=10)
+                            if topics_result["success"]:
+                                try:
+                                    topics = json.loads(topics_result["stdout"])
+                                    for topic in topics if isinstance(topics, list) else []:
+                                        topic_id = topic.get("id", topic) if isinstance(topic, dict) else topic
+                                        if topic_id not in all_topics:
+                                            all_topics[topic_id] = []
+                                        all_topics[topic_id].append(strat_name)
+                                except:
+                                    pass
+                    except:
+                        pass
+        except:
+            pass
+
+    # Find overlapping topics
+    overlapping = [
+        {"topic": tid, "strategies": strats, "count": len(strats)}
+        for tid, strats in all_topics.items()
+        if len(strats) > 1
+    ]
+    overlapping.sort(key=lambda x: x["count"], reverse=True)
+
+    return {
+        "total_strategies": len(all_strategies),
+        "total_unique_topics": len(all_topics),
+        "overlapping_topics": overlapping[:20],
+        "highest_concentration": overlapping[0] if overlapping else None,
+        "strategies": all_strategies
+    }
+
+
+@app.get("/mcp/tools/system_activity_log", dependencies=[Depends(verify_api_key)])
+async def system_activity_log(hours: int = 24):
+    """Recent system activity - analyses run, strategies updated, articles ingested."""
+    activity = []
+
+    # Get recent logs from workers
+    for service in ["worker-main", "worker-sources", "apis"]:
+        result = run_command(
+            f"docker logs --since {hours}h {service} 2>&1 | grep -iE '(SUCCESS|COMPLETED|INGESTED|ANALYZED|UPDATED|CREATED)' | tail -30",
+            timeout=30
+        )
+
+        if result["success"] and result["stdout"].strip():
+            for line in result["stdout"].strip().split("\n"):
+                if line:
+                    activity.append({
+                        "service": service,
+                        "message": line[:300],
+                        "type": "activity"
+                    })
+
+    # Sort by recency (assuming timestamps in log lines)
+    activity = activity[-50:]  # Limit to 50 most recent
+
+    return {
+        "hours_searched": hours,
+        "activity": activity,
+        "count": len(activity),
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 

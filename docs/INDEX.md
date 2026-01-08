@@ -70,9 +70,27 @@ These are the major capabilities of the system. Each lives in `graph-functions/s
 
 ---
 
+## Data Storage (Where Things Live)
+
+**IMPORTANT**: Not everything is in Neo4j!
+
+| Data | Location | Notes |
+|------|----------|-------|
+| **Users** | `saga-be/users/users.json` | Single JSON file |
+| **Strategies** | `saga-be/users/{username}/strategy_*.json` | JSON per strategy |
+| **Conversations** | `saga-be/users/{username}/conversations/` | JSON per conversation |
+| **Articles (cold)** | `saga-be/data/raw_news/{date}/` | JSON per article |
+| **Topics & Analysis** | Neo4j | Graph database |
+| **Articles (indexed)** | Neo4j | For search |
+| **Relationships** | Neo4j | Topic connections |
+
+**Key**: User data = JSON files (saga-be). Market intelligence = Neo4j (graph-functions).
+
+---
+
 ## Graph Operations
 
-All Neo4j operations live in `graph-functions/src/graph/`.
+Neo4j operations live in `graph-functions/src/graph/`. **Note**: Neo4j stores market intelligence (topics, analysis, relationships), NOT user data.
 
 | File | Purpose |
 |------|---------|
@@ -81,7 +99,7 @@ All Neo4j operations live in `graph-functions/src/graph/`.
 | `ops/article.py` | Article CRUD operations |
 | `ops/topic.py` | Topic CRUD operations |
 | `ops/link.py` | Relationship operations |
-| `ops/user_strategy.py` | User strategy storage |
+| `ops/user_strategy.py` | Strategy-to-topic mappings (not strategy storage!) |
 
 ---
 

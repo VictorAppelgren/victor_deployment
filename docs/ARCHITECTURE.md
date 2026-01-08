@@ -205,19 +205,55 @@ victor_deployment/
 
 ---
 
+## Data Storage (Where Things Actually Live)
+
+**IMPORTANT**: Understanding where data lives is critical. Neo4j is NOT used for everything.
+
+### File-Based Storage (saga-be) - User Data
+| Data Type | Location | Format |
+|-----------|----------|--------|
+| **Users** | `saga-be/users/users.json` | Single JSON file with all users |
+| **Strategies** | `saga-be/users/{username}/strategy_*.json` | One JSON file per strategy |
+| **Conversations** | `saga-be/users/{username}/conversations/` | One JSON per conversation |
+| **Articles (cold)** | `saga-be/data/raw_news/{YYYY-MM-DD}/` | One JSON per article |
+
+### Neo4j Graph Database (graph-functions) - Market Intelligence
+| Data Type | Purpose |
+|-----------|---------|
+| **Topics** | Market analysis nodes (fundamental, medium, current analysis) |
+| **Articles (indexed)** | Article nodes with embeddings for semantic search |
+| **Relationships** | INFLUENCES, CORRELATES_WITH, HEDGES, PEERS between topics |
+| **Analysis Results** | Saved analysis outputs from agents |
+
+### Key Insight
+```
+Users & Strategies  →  JSON files (saga-be/users/)     ← NOT in Neo4j!
+Conversations       →  JSON files (saga-be/users/)     ← NOT in Neo4j!
+Articles (storage)  →  JSON files (saga-be/data/)      ← Cold storage
+Market Intelligence →  Neo4j (graph-functions)         ← Topics, analysis, relationships
+```
+
+**Why this matters for AI assistants**:
+- To query users/strategies → Call saga-be API (requires auth)
+- To query topics/analysis → Use MCP/Neo4j (saga-graph)
+- Don't try to query users from Neo4j - they don't exist there!
+
+---
+
 ## Data Flow Examples
 
 ### 1. User Views Dashboard
 ```
-Frontend → saga-be/routes/strategies.py → graph-functions/API/graph_api.py → Neo4j
+Frontend → saga-be/routes/strategies.py → reads from saga-be/users/{username}/strategy_*.json
+                                        → (optionally) calls graph-functions for analysis data
 ```
 
 ### 2. Article Ingestion
 ```
-Perigon API → graph-functions/src/clients/perigon/ 
+Perigon API → graph-functions/src/clients/perigon/
            → graph-functions/src/functions/ingest_article/
-           → graph-functions/src/graph/ops/article.py
-           → Neo4j
+           → Neo4j (indexed for search)
+           → saga-be/data/raw_news/ (cold storage)
 ```
 
 ### 3. Analysis Generation
@@ -225,7 +261,8 @@ Perigon API → graph-functions/src/clients/perigon/
 User request → saga-be → graph-functions/src/agents/analysis/orchestrator.py
             → Multiple agents (critic, writer, etc.)
             → Each agent uses LLM router
-            → Results saved to Neo4j
+            → Results saved to Neo4j (topic analysis)
+            → Strategy results saved to saga-be/users/{username}/strategy_*.json
 ```
 
 ---

@@ -2,6 +2,33 @@
 
 Remote development access for Claude Code. Gives AI assistants direct access to the production server for debugging, deployment, and monitoring.
 
+## Data Architecture (IMPORTANT!)
+
+**Before using the MCP tools, understand where data lives:**
+
+### What the MCP CAN Access (Neo4j via `query_neo4j`)
+| Data | Example Query |
+|------|---------------|
+| **Topics** | `MATCH (t:Topic) RETURN t.id, t.name` |
+| **Topic Analysis** | `MATCH (t:Topic) RETURN t.fundamental_analysis, t.current_analysis` |
+| **Articles (indexed)** | `MATCH (a:Article) RETURN a.title, a.published_at` |
+| **Relationships** | `MATCH (t1)-[r:INFLUENCES]->(t2) RETURN t1.name, t2.name` |
+
+### What the MCP CANNOT Query via Neo4j
+| Data | Where It Actually Lives | How to Access |
+|------|------------------------|---------------|
+| **Users** | `saga-be/users/users.json` | Use `/mcp/tools/list_users` |
+| **Strategies** | `saga-be/users/{username}/strategy_*.json` | Use `/mcp/tools/user_strategies` |
+| **Conversations** | `saga-be/users/{username}/conversations/` | Read files directly |
+| **Articles (cold)** | `saga-be/data/raw_news/{date}/` | Read files directly |
+
+**Key Insight**: Neo4j stores **market intelligence** (topics, analysis, relationships). User data (accounts, strategies, conversations) are **JSON files** managed by saga-be.
+
+**Don't do this**: `MATCH (u:User) RETURN u` - Users don't exist in Neo4j!
+**Do this instead**: Use `/mcp/tools/list_users` or `/mcp/tools/user_strategies`
+
+---
+
 ## Quick Start
 
 ### Deploy to Server
@@ -204,6 +231,70 @@ curl "https://sagalabs.world/mcp/tools/recent_articles?limit=20&hours=24" \
   -H "X-API-Key: YOUR_KEY"
 ```
 
+### Topic Analysis Tools (Deep Dive)
+
+Advanced tools for deep analysis of topics, relationships, and influence chains.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/topic_analysis_full` | GET | Get ALL analysis for a topic (fundamental, medium, current, sentiment) |
+| `/mcp/tools/topic_relationships` | GET | Get all relationships for a topic with types and strengths |
+| `/mcp/tools/topic_influence_map` | GET | Multi-hop influence chain mapping (1-4 hops deep) |
+| `/mcp/tools/topic_coverage_gaps` | GET | Find topics with missing or stale analysis |
+
+**Example: Get Full Topic Analysis**
+```bash
+curl "https://sagalabs.world/mcp/tools/topic_analysis_full?topic_id=topic_us_monetary_policy" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Topic Relationships**
+```bash
+curl "https://sagalabs.world/mcp/tools/topic_relationships?topic_id=topic_us_monetary_policy" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Multi-Hop Influence Map**
+```bash
+# Get 3-hop influence chain for a topic
+curl "https://sagalabs.world/mcp/tools/topic_influence_map?topic_id=topic_us_monetary_policy&depth=3" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Find Coverage Gaps**
+```bash
+curl "https://sagalabs.world/mcp/tools/topic_coverage_gaps" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+### Article Tools (Advanced)
+
+Advanced article access and search.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/article_detail` | GET | Get full article content with all metadata |
+| `/mcp/tools/search_articles` | GET | Search articles by keyword with filters |
+| `/mcp/tools/source_stats` | GET | Get article count and quality stats by source |
+
+**Example: Get Article Detail**
+```bash
+curl "https://sagalabs.world/mcp/tools/article_detail?article_id=art_abc123" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Search Articles**
+```bash
+curl "https://sagalabs.world/mcp/tools/search_articles?query=fed+rate+hike&limit=20" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Source Statistics**
+```bash
+curl "https://sagalabs.world/mcp/tools/source_stats" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
 ### Strategy Tools
 
 Tools for reading user strategies via the internal API.
@@ -214,6 +305,10 @@ Tools for reading user strategies via the internal API.
 | `/mcp/tools/user_strategies` | POST | Get strategies for a user |
 | `/mcp/tools/strategy_analysis` | POST | Get analysis for a strategy |
 | `/mcp/tools/strategy_topics` | POST | Get topics for a strategy |
+| `/mcp/tools/strategy_detail` | GET | Get full strategy with thesis, topics, and latest analysis |
+| `/mcp/tools/list_strategy_files` | GET | List all strategy JSON files for a user |
+| `/mcp/tools/raw_strategy_file` | GET | Read raw strategy JSON file contents |
+| `/mcp/tools/strategy_conversations` | GET | Get conversation history for a strategy |
 
 **Example: List Users**
 ```bash
@@ -243,6 +338,30 @@ curl -X POST https://sagalabs.world/mcp/tools/strategy_topics \
   -H "X-API-Key: YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"strategy_id": "strategy_123"}'
+```
+
+**Example: Get Full Strategy Detail**
+```bash
+curl "https://sagalabs.world/mcp/tools/strategy_detail?username=victor&strategy_id=strategy_123" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: List Strategy Files**
+```bash
+curl "https://sagalabs.world/mcp/tools/list_strategy_files?username=victor" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Read Raw Strategy File**
+```bash
+curl "https://sagalabs.world/mcp/tools/raw_strategy_file?username=victor&filename=strategy_123.json" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Strategy Conversations**
+```bash
+curl "https://sagalabs.world/mcp/tools/strategy_conversations?username=victor&strategy_id=strategy_123" \
+  -H "X-API-Key: YOUR_KEY"
 ```
 
 ### Action Tools (Guarded)
@@ -283,6 +402,7 @@ curl -X POST https://sagalabs.world/mcp/tools/trigger_analysis \
 | `/mcp/tools/system_health` | GET | Get CPU, memory, disk status |
 | `/mcp/tools/daily_stats` | GET | Get daily stats from backend API |
 | `/mcp/tools/run_command` | POST | Run limited safe commands |
+| `/mcp/tools/system_activity_log` | GET | Get recent system activity (deployments, restarts, errors) |
 
 **Example: System Health**
 ```bash
@@ -295,6 +415,106 @@ curl https://sagalabs.world/mcp/tools/system_health \
 curl https://sagalabs.world/mcp/tools/daily_stats \
   -H "X-API-Key: YOUR_KEY"
 ```
+
+**Example: System Activity Log**
+```bash
+curl "https://sagalabs.world/mcp/tools/system_activity_log?hours=24" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+### Pipeline & Worker Monitoring
+
+Tools for monitoring the article ingestion and analysis pipeline.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/worker_status` | GET | Get status of all worker processes |
+| `/mcp/tools/failed_jobs` | GET | Get recent failed jobs with error details |
+| `/mcp/tools/processing_backlog` | GET | Get articles pending processing |
+| `/mcp/tools/ingestion_stats` | GET | Get article ingestion statistics over time |
+
+**Example: Get Worker Status**
+```bash
+curl "https://sagalabs.world/mcp/tools/worker_status" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Failed Jobs**
+```bash
+curl "https://sagalabs.world/mcp/tools/failed_jobs?hours=24" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Processing Backlog**
+```bash
+curl "https://sagalabs.world/mcp/tools/processing_backlog" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Ingestion Stats**
+```bash
+curl "https://sagalabs.world/mcp/tools/ingestion_stats?days=7" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+### Pipeline Analysis Tools
+
+Tools for understanding how content flows through the analysis pipeline.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/topic_mapping_result` | GET | See how a specific article was mapped to topics |
+| `/mcp/tools/exploration_paths` | GET | See what "chain reactions" were explored for an article |
+| `/mcp/tools/agent_outputs` | GET | Get raw agent outputs for debugging |
+
+**Example: Get Topic Mapping Result**
+```bash
+curl "https://sagalabs.world/mcp/tools/topic_mapping_result?article_id=art_abc123" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Exploration Paths**
+```bash
+curl "https://sagalabs.world/mcp/tools/exploration_paths?article_id=art_abc123" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+**Example: Get Agent Outputs**
+```bash
+curl "https://sagalabs.world/mcp/tools/agent_outputs?article_id=art_abc123&agent_type=critic" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+### Diagnostic Tools
+
+Tools for diagnosing issues and finding optimization opportunities.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp/tools/strategy_health_check` | GET | Diagnose why a strategy may be underperforming |
+| `/mcp/tools/cross_strategy_insights` | GET | Find topic overlaps and concentration risks across ALL strategies |
+
+**Example: Strategy Health Check**
+```bash
+curl "https://sagalabs.world/mcp/tools/strategy_health_check?username=victor&strategy_id=strategy_123" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+Returns a health score (0-1) with:
+- Issues found (thesis quality, topic coverage, staleness)
+- Strengths identified
+- Recommendations for improvement
+
+**Example: Cross-Strategy Insights**
+```bash
+curl "https://sagalabs.world/mcp/tools/cross_strategy_insights" \
+  -H "X-API-Key: YOUR_KEY"
+```
+
+Returns:
+- Topics used across multiple strategies
+- Concentration risk analysis
+- Potential correlation blind spots
 
 ## Allowed Services
 
