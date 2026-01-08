@@ -2304,94 +2304,68 @@ trigger_reanalysis('{req.topic_id}', force={req.force})
 @app.get("/mcp/tools/strategy_detail", dependencies=[Depends(verify_api_key)])
 async def strategy_detail(username: str, strategy_id: str):
     """Get FULL strategy details including thesis, position, target, is_default, timestamps."""
-    # Read raw file from saga-be users directory
-    # Handle both "strategy_123" and just "123" formats
-    if strategy_id.startswith("strategy_"):
-        file_path = f"/opt/saga-graph/saga-be/users/{username}/{strategy_id}.json"
-    else:
-        file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
-
-    try:
-        result = run_command(f"cat '{file_path}'", timeout=10)
-        if result["success"] and result["stdout"].strip():
-            data = json.loads(result["stdout"])
-            return {
-                "strategy_id": strategy_id,
-                "username": username,
-                "strategy": data,
-                "file_path": file_path
-            }
-        else:
-            return {"error": f"Strategy file not found: {file_path}", "success": False}
-    except json.JSONDecodeError as e:
-        return {"error": f"Invalid JSON in strategy file: {e}", "raw": result["stdout"][:500]}
-
-
-@app.get("/mcp/tools/list_strategy_files", dependencies=[Depends(verify_api_key)])
-async def list_strategy_files(username: str):
-    """List all strategy JSON files for a user with metadata."""
-    user_dir = f"/opt/saga-graph/saga-be/users/{username}"
-
-    # List all strategy files
-    result = run_command(f"ls -la {user_dir}/strategy_*.json 2>/dev/null", timeout=10)
-
-    if not result["success"] or not result["stdout"].strip():
-        return {"username": username, "strategies": [], "count": 0, "note": "No strategy files found"}
-
-    # Parse each strategy file to get metadata
-    strategies = []
-    for line in result["stdout"].strip().split("\n"):
-        if "strategy_" in line:
-            parts = line.split()
-            filename = parts[-1] if parts else None
-            if filename:
-                # Read the file to get metadata
-                cat_result = run_command(f"cat '{filename}'", timeout=5)
-                if cat_result["success"]:
-                    try:
-                        data = json.loads(cat_result["stdout"])
-                        strategies.append({
-                            "filename": os.path.basename(filename),
-                            "strategy_id": data.get("id"),
-                            "asset": data.get("asset", {}).get("primary"),
-                            "is_default": data.get("is_default", False),
-                            "created_at": data.get("created_at"),
-                            "updated_at": data.get("updated_at"),
-                            "thesis_preview": (data.get("user_input", {}).get("strategy_text", "")[:100] + "...")
-                        })
-                    except json.JSONDecodeError:
-                        strategies.append({"filename": os.path.basename(filename), "error": "Invalid JSON"})
-
-    return {
-        "username": username,
-        "strategies": strategies,
-        "count": len(strategies)
-    }
-
-
-@app.get("/mcp/tools/raw_strategy_file", dependencies=[Depends(verify_api_key)])
-async def raw_strategy_file(username: str, strategy_id: str):
-    """Read raw strategy JSON file - exactly what's on disk."""
-    # Handle both "strategy_123" and just "123" formats
-    if strategy_id.startswith("strategy_"):
-        file_path = f"/opt/saga-graph/saga-be/users/{username}/{strategy_id}.json"
-    else:
-        file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
-
-    result = run_command(f"cat '{file_path}'", timeout=10)
+    # Use internal API to get strategy (data is inside Docker volume)
+    url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}"
+    result = run_command(f"curl -s '{url}'", timeout=10)
 
     if result["success"] and result["stdout"].strip():
         try:
             data = json.loads(result["stdout"])
+            if "error" in data:
+                return {"error": data["error"], "success": False}
+            return {
+                "strategy_id": strategy_id,
+                "username": username,
+                "strategy": data,
+                "success": True
+            }
+        except json.JSONDecodeError as e:
+            return {"error": f"Invalid JSON response: {e}", "raw": result["stdout"][:500]}
+    return {"error": "Failed to fetch strategy from API", "success": False}
+
+
+@app.get("/mcp/tools/list_strategy_files", dependencies=[Depends(verify_api_key)])
+async def list_strategy_files(username: str):
+    """List all strategies for a user with metadata."""
+    # Use internal API (data is inside Docker volume)
+    url = f"http://apis:8000/api/users/{username}/strategies"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"] and result["stdout"].strip():
+        try:
+            data = json.loads(result["stdout"])
+            strategies = data.get("strategies", [])
+            return {
+                "username": username,
+                "strategies": strategies,
+                "count": len(strategies)
+            }
+        except json.JSONDecodeError:
+            return {"error": "Invalid JSON response", "raw": result["stdout"][:500]}
+    return {"username": username, "strategies": [], "count": 0, "note": "No strategies found or API error"}
+
+
+@app.get("/mcp/tools/raw_strategy_file", dependencies=[Depends(verify_api_key)])
+async def raw_strategy_file(username: str, strategy_id: str):
+    """Read full strategy JSON - complete data from API."""
+    # Use internal API (data is inside Docker volume)
+    url = f"http://apis:8000/api/users/{username}/strategies/{strategy_id}"
+    result = run_command(f"curl -s '{url}'", timeout=10)
+
+    if result["success"] and result["stdout"].strip():
+        try:
+            data = json.loads(result["stdout"])
+            if "error" in data:
+                return {"error": data["error"], "success": False}
             return {
                 "username": username,
                 "strategy_id": strategy_id,
-                "file_path": file_path,
-                "raw_content": data
+                "raw_content": data,
+                "success": True
             }
         except json.JSONDecodeError:
             return {"error": "Invalid JSON", "raw_content": result["stdout"][:2000]}
-    return {"error": f"File not found: {file_path}", "success": False}
+    return {"error": "Failed to fetch strategy from API", "success": False}
 
 
 @app.get("/mcp/tools/strategy_conversations", dependencies=[Depends(verify_api_key)])
