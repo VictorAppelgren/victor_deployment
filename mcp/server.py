@@ -2431,21 +2431,16 @@ async def strategy_conversations(username: str, strategy_id: str, limit: int = 1
 @app.get("/mcp/tools/topic_analysis_full", dependencies=[Depends(verify_api_key)])
 async def topic_analysis_full(topic_id: str):
     """Get ALL 4 analysis timeframes for a topic."""
-    cypher_query = f"""MATCH (t:Topic {{id: '{topic_id}'}})
-RETURN t.id as id, t.name as name, t.type as type, t.category as category,
-       t.fundamental_analysis as fundamental, t.medium_analysis as medium,
-       t.current_analysis as current, t.drivers as drivers,
-       t.last_analyzed as last_analyzed, t.last_updated as last_updated"""
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-results = run_cypher(\\"{cypher_query}\\")
+from src.graph.neo4j_client import run_cypher
+q = "MATCH (t:Topic {{id: \\"{topic_id}\\"}}) RETURN t.id as id, t.name as name, t.type as type, t.category as category, t.fundamental_analysis as fundamental, t.medium_analysis as medium, t.current_analysis as current, t.drivers as drivers, t.last_analyzed as last_analyzed, t.last_updated as last_updated"
+results = run_cypher(q)
 if results:
     print(json.dumps(results[0], default=str))
 else:
-    print(json.dumps({{'error': 'Topic not found'}}))
-"'''
+    print(json.dumps({{"error": "Topic not found"}}))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2475,16 +2470,13 @@ else:
 @app.get("/mcp/tools/topic_relationships", dependencies=[Depends(verify_api_key)])
 async def topic_relationships(topic_id: str):
     """Get all relationships for a topic with strength and mechanisms."""
-    outgoing_query = f"MATCH (t:Topic {{id: '{topic_id}'}})-[r]->(t2:Topic) RETURN type(r) as rel_type, t2.id as target_id, t2.name as target_name, r.strength as strength, r.mechanism as mechanism"
-    incoming_query = f"MATCH (t2:Topic)-[r]->(t:Topic {{id: '{topic_id}'}}) RETURN type(r) as rel_type, t2.id as source_id, t2.name as source_name, r.strength as strength, r.mechanism as mechanism"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-outgoing = run_cypher(\\"{outgoing_query}\\")
-incoming = run_cypher(\\"{incoming_query}\\")
-print(json.dumps({{'outgoing': outgoing, 'incoming': incoming}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+outgoing = run_cypher("MATCH (t:Topic {{id: \\"{topic_id}\\"}})-[r]->(t2:Topic) RETURN type(r) as rel_type, t2.id as target_id, t2.name as target_name, r.strength as strength, r.mechanism as mechanism")
+incoming = run_cypher("MATCH (t2:Topic)-[r]->(t:Topic {{id: \\"{topic_id}\\"}}) RETURN type(r) as rel_type, t2.id as source_id, t2.name as source_name, r.strength as strength, r.mechanism as mechanism")
+print(json.dumps({{"outgoing": outgoing, "incoming": incoming}}, default=str))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2519,16 +2511,13 @@ print(json.dumps({{'outgoing': outgoing, 'incoming': incoming}}, default=str))
 @app.get("/mcp/tools/topic_influence_map", dependencies=[Depends(verify_api_key)])
 async def topic_influence_map(topic_id: str, depth: int = 2):
     """Get full influence graph for a topic - N hops deep."""
-    outward_query = f"MATCH path = (start:Topic {{id: '{topic_id}'}})-[:INFLUENCES*1..{depth}]->(end:Topic) WITH nodes(path) as topics, relationships(path) as rels UNWIND range(0, size(rels)-1) as idx RETURN topics[idx].id as from_id, topics[idx].name as from_name, topics[idx+1].id as to_id, topics[idx+1].name as to_name, rels[idx].strength as strength, rels[idx].mechanism as mechanism, idx + 1 as hop"
-    inward_query = f"MATCH path = (start:Topic)-[:INFLUENCES*1..{depth}]->(end:Topic {{id: '{topic_id}'}}) WITH nodes(path) as topics, relationships(path) as rels UNWIND range(0, size(rels)-1) as idx RETURN topics[idx].id as from_id, topics[idx].name as from_name, topics[idx+1].id as to_id, topics[idx+1].name as to_name, rels[idx].strength as strength, rels[idx].mechanism as mechanism, idx + 1 as hop"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-outward = run_cypher(\\"{outward_query}\\")
-inward = run_cypher(\\"{inward_query}\\")
-print(json.dumps({{'influences_outward': outward, 'influenced_by': inward}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+outward = run_cypher("MATCH path = (start:Topic {{id: \\"{topic_id}\\"}})-[:INFLUENCES*1..{depth}]->(end:Topic) WITH nodes(path) as topics, relationships(path) as rels UNWIND range(0, size(rels)-1) as idx RETURN topics[idx].id as from_id, topics[idx].name as from_name, topics[idx+1].id as to_id, topics[idx+1].name as to_name, rels[idx].strength as strength, rels[idx].mechanism as mechanism, idx + 1 as hop")
+inward = run_cypher("MATCH path = (start:Topic)-[:INFLUENCES*1..{depth}]->(end:Topic {{id: \\"{topic_id}\\"}}) WITH nodes(path) as topics, relationships(path) as rels UNWIND range(0, size(rels)-1) as idx RETURN topics[idx].id as from_id, topics[idx].name as from_name, topics[idx+1].id as to_id, topics[idx+1].name as to_name, rels[idx].strength as strength, rels[idx].mechanism as mechanism, idx + 1 as hop")
+print(json.dumps({{"influences_outward": outward, "influenced_by": inward}}, default=str))
+'"""
     result = run_command(cmd, timeout=60)
 
     if result["success"]:
@@ -2551,23 +2540,14 @@ print(json.dumps({{'influences_outward': outward, 'influenced_by': inward}}, def
 @app.get("/mcp/tools/topic_coverage_gaps", dependencies=[Depends(verify_api_key)])
 async def topic_coverage_gaps(stale_days: int = 7):
     """Find topics with stale/missing analysis."""
-    never_query = "MATCH (t:Topic) WHERE t.fundamental_analysis IS NULL AND t.current_analysis IS NULL OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count ORDER BY article_count DESC"
-    stale_query = f"MATCH (t:Topic) WHERE t.last_analyzed IS NOT NULL AND t.last_analyzed < datetime() - duration('P{stale_days}D') OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) WITH t, count(a) as article_count RETURN t.id as topic_id, t.name as topic_name, t.last_analyzed as last_analyzed, article_count ORDER BY t.last_analyzed ASC"
-    starving_query = "MATCH (t:Topic) OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) WITH t, count(a) as article_count WHERE article_count < 5 RETURN t.id as topic_id, t.name as topic_name, article_count ORDER BY article_count ASC"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-never_analyzed = run_cypher(\\"{never_query}\\")
-stale = run_cypher(\\"{stale_query}\\")
-starving = run_cypher(\\"{starving_query}\\")
-print(json.dumps({{
-    'never_analyzed': never_analyzed,
-    'stale_analysis': stale,
-    'starving_topics': starving,
-    'summary': {{'never_analyzed_count': len(never_analyzed), 'stale_count': len(stale), 'starving_count': len(starving)}}
-}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+never_analyzed = run_cypher("MATCH (t:Topic) WHERE t.fundamental_analysis IS NULL AND t.current_analysis IS NULL OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) RETURN t.id as topic_id, t.name as topic_name, count(a) as article_count ORDER BY article_count DESC")
+stale = run_cypher("MATCH (t:Topic) WHERE t.last_analyzed IS NOT NULL AND t.last_analyzed < datetime() - duration(\\"P{stale_days}D\\") OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) WITH t, count(a) as article_count RETURN t.id as topic_id, t.name as topic_name, t.last_analyzed as last_analyzed, article_count ORDER BY t.last_analyzed ASC")
+starving = run_cypher("MATCH (t:Topic) OPTIONAL MATCH (a:Article)-[:ABOUT]->(t) WITH t, count(a) as article_count WHERE article_count < 5 RETURN t.id as topic_id, t.name as topic_name, article_count ORDER BY article_count ASC")
+print(json.dumps({{"never_analyzed": never_analyzed, "stale_analysis": stale, "starving_topics": starving, "summary": {{"never_analyzed_count": len(never_analyzed), "stale_count": len(stale), "starving_count": len(starving)}}}}, default=str))
+'"""
     result = run_command(cmd, timeout=60)
 
     if result["success"]:
@@ -2749,23 +2729,14 @@ async def failed_jobs(hours: int = 24):
 @app.get("/mcp/tools/processing_backlog", dependencies=[Depends(verify_api_key)])
 async def processing_backlog():
     """What's waiting to be processed."""
-    pending_topics_q = "MATCH (a:Article) WHERE NOT (a)-[:ABOUT]->(:Topic) AND a.created_at > datetime() - duration('P7D') RETURN count(a) as count"
-    pending_analysis_q = "MATCH (t:Topic) WHERE t.last_analyzed IS NULL OR t.last_analyzed < datetime() - duration('P7D') RETURN count(t) as count"
-    recent_unproc_q = "MATCH (a:Article) WHERE a.created_at > datetime() - duration('PT6H') AND (a.processed IS NULL OR a.processed = false) RETURN count(a) as count"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = """docker exec -w /app/graph-functions apis python -c '
 import json
-pending_topics = run_cypher(\\"{pending_topics_q}\\")[0]['count']
-pending_analysis = run_cypher(\\"{pending_analysis_q}\\")[0]['count']
-recent_unprocessed = run_cypher(\\"{recent_unproc_q}\\")[0]['count']
-print(json.dumps({{
-    'pending_topic_assignment': pending_topics,
-    'pending_analysis_refresh': pending_analysis,
-    'recent_unprocessed': recent_unprocessed,
-    'health': 'nominal' if (pending_topics < 100 and pending_analysis < 20) else 'backlogged'
-}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+pending_topics = run_cypher("MATCH (a:Article) WHERE NOT (a)-[:ABOUT]->(:Topic) AND a.created_at > datetime() - duration(\\"P7D\\") RETURN count(a) as count")[0]["count"]
+pending_analysis = run_cypher("MATCH (t:Topic) WHERE t.last_analyzed IS NULL OR t.last_analyzed < datetime() - duration(\\"P7D\\") RETURN count(t) as count")[0]["count"]
+recent_unprocessed = run_cypher("MATCH (a:Article) WHERE a.created_at > datetime() - duration(\\"PT6H\\") AND (a.processed IS NULL OR a.processed = false) RETURN count(a) as count")[0]["count"]
+print(json.dumps({"pending_topic_assignment": pending_topics, "pending_analysis_refresh": pending_analysis, "recent_unprocessed": recent_unprocessed, "health": "nominal" if (pending_topics < 100 and pending_analysis < 20) else "backlogged"}, default=str))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2779,24 +2750,14 @@ print(json.dumps({{
 @app.get("/mcp/tools/ingestion_stats", dependencies=[Depends(verify_api_key)])
 async def ingestion_stats(days: int = 7):
     """Article ingestion stats by source and day."""
-    by_source_q = f"MATCH (a:Article) WHERE a.created_at > datetime() - duration('P{days}D') RETURN a.source as source, count(a) as count ORDER BY count DESC"
-    by_day_q = f"MATCH (a:Article) WHERE a.created_at > datetime() - duration('P{days}D') RETURN date(a.created_at) as day, count(a) as count ORDER BY day DESC"
-    total_q = f"MATCH (a:Article) WHERE a.created_at > datetime() - duration('P{days}D') RETURN count(a) as total"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-by_source = run_cypher(\\"{by_source_q}\\")
-by_day = run_cypher(\\"{by_day_q}\\")
-total = run_cypher(\\"{total_q}\\")[0]['total']
-print(json.dumps({{
-    'by_source': by_source,
-    'by_day': by_day,
-    'total_articles': total,
-    'days': {days},
-    'avg_per_day': round(total / {days}, 1)
-}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+by_source = run_cypher("MATCH (a:Article) WHERE a.created_at > datetime() - duration(\\"P{days}D\\") RETURN a.source as source, count(a) as count ORDER BY count DESC")
+by_day = run_cypher("MATCH (a:Article) WHERE a.created_at > datetime() - duration(\\"P{days}D\\") RETURN date(a.created_at) as day, count(a) as count ORDER BY day DESC")
+total = run_cypher("MATCH (a:Article) WHERE a.created_at > datetime() - duration(\\"P{days}D\\") RETURN count(a) as total")[0]["total"]
+print(json.dumps({{"by_source": by_source, "by_day": by_day, "total_articles": total, "days": {days}, "avg_per_day": round(total / {days}, 1)}}, default=str))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2814,17 +2775,15 @@ print(json.dumps({{
 @app.get("/mcp/tools/article_detail", dependencies=[Depends(verify_api_key)])
 async def article_detail(article_id: str):
     """Get full article content + classification + topic assignments."""
-    article_q = f"MATCH (a:Article {{id: '{article_id}'}}) OPTIONAL MATCH (a)-[r:ABOUT]->(t:Topic) RETURN a.id as id, a.title as title, a.source as source, a.url as url, a.content as content, a.summary as summary, a.published_at as published_at, a.created_at as created_at, a.classification as classification, a.category as category, collect({{topic_id: t.id, topic_name: t.name, importance_risk: r.importance_risk, importance_opportunity: r.importance_opportunity, importance_trend: r.importance_trend, importance_catalyst: r.importance_catalyst, motivation: r.motivation, timeframe: r.timeframe}}) as topics"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-results = run_cypher(\\"{article_q}\\")
+from src.graph.neo4j_client import run_cypher
+results = run_cypher("MATCH (a:Article {{id: \\"{article_id}\\"}}) OPTIONAL MATCH (a)-[r:ABOUT]->(t:Topic) RETURN a.id as id, a.title as title, a.source as source, a.url as url, a.content as content, a.summary as summary, a.published_at as published_at, a.created_at as created_at, a.classification as classification, a.category as category, collect({{topic_id: t.id, topic_name: t.name, importance_risk: r.importance_risk, importance_opportunity: r.importance_opportunity}}) as topics")
 if results:
     print(json.dumps(results[0], default=str))
 else:
-    print(json.dumps({{'error': 'Article not found'}}))
-"'''
+    print(json.dumps({{"error": "Article not found"}}))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2838,6 +2797,7 @@ else:
 @app.get("/mcp/tools/search_articles", dependencies=[Depends(verify_api_key)])
 async def search_articles_tool(query: str, topic_id: str = None, since: str = None, limit: int = 20):
     """Search articles by keyword, date range, topic."""
+    import base64
     # Build cypher query
     where_clauses = [f"a.title =~ '(?i).*{query}.*' OR a.content =~ '(?i).*{query}.*'"]
 
@@ -2852,12 +2812,16 @@ async def search_articles_tool(query: str, topic_id: str = None, since: str = No
     where_clause = " AND ".join(where_clauses)
     search_q = f"MATCH (a:Article) {topic_match} WHERE {where_clause} RETURN DISTINCT a.id as id, a.title as title, a.source as source, a.published_at as published_at, a.summary as summary ORDER BY a.published_at DESC LIMIT {limit}"
 
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
+    # Encode query to avoid shell escaping issues
+    encoded_q = base64.b64encode(search_q.encode()).decode()
+
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
+import json, base64
 from src.graph.neo4j_client import run_cypher
-import json
-results = run_cypher(\\"{search_q}\\")
+q = base64.b64decode("{encoded_q}").decode()
+results = run_cypher(q)
 print(json.dumps(results, default=str))
-"'''
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
@@ -2878,14 +2842,12 @@ print(json.dumps(results, default=str))
 @app.get("/mcp/tools/source_stats", dependencies=[Depends(verify_api_key)])
 async def source_stats(days: int = 7):
     """Article counts by source with quality indicators."""
-    stats_q = f"MATCH (a:Article) WHERE a.created_at > datetime() - duration('P{days}D') RETURN a.source as source, count(a) as article_count ORDER BY article_count DESC"
-
-    cmd = f'''docker exec -w /app/graph-functions apis python -c "
-from src.graph.neo4j_client import run_cypher
+    cmd = f"""docker exec -w /app/graph-functions apis python -c '
 import json
-stats = run_cypher(\\"{stats_q}\\")
-print(json.dumps({{'sources': stats, 'days': {days}}}, default=str))
-"'''
+from src.graph.neo4j_client import run_cypher
+stats = run_cypher("MATCH (a:Article) WHERE a.created_at > datetime() - duration(\\"P{days}D\\") RETURN a.source as source, count(a) as article_count ORDER BY article_count DESC")
+print(json.dumps({{"sources": stats, "days": {days}}}, default=str))
+'"""
     result = run_command(cmd, timeout=30)
 
     if result["success"]:
