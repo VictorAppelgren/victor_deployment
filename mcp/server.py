@@ -2305,7 +2305,11 @@ trigger_reanalysis('{req.topic_id}', force={req.force})
 async def strategy_detail(username: str, strategy_id: str):
     """Get FULL strategy details including thesis, position, target, is_default, timestamps."""
     # Read raw file from saga-be users directory
-    file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
+    # Handle both "strategy_123" and just "123" formats
+    if strategy_id.startswith("strategy_"):
+        file_path = f"/opt/saga-graph/saga-be/users/{username}/{strategy_id}.json"
+    else:
+        file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
 
     try:
         result = run_command(f"cat '{file_path}'", timeout=10)
@@ -2368,7 +2372,11 @@ async def list_strategy_files(username: str):
 @app.get("/mcp/tools/raw_strategy_file", dependencies=[Depends(verify_api_key)])
 async def raw_strategy_file(username: str, strategy_id: str):
     """Read raw strategy JSON file - exactly what's on disk."""
-    file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
+    # Handle both "strategy_123" and just "123" formats
+    if strategy_id.startswith("strategy_"):
+        file_path = f"/opt/saga-graph/saga-be/users/{username}/{strategy_id}.json"
+    else:
+        file_path = f"/opt/saga-graph/saga-be/users/{username}/strategy_{strategy_id}.json"
 
     result = run_command(f"cat '{file_path}'", timeout=10)
 
