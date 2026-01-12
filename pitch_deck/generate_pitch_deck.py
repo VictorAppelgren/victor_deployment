@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-Saga Pitch Deck Generator - GOD TIER VERSION v2
+Saga Pitch Deck Generator - WORLD-CLASS VC VERSION
 
-Fixes:
-- Content fits on single slides (reduced text)
-- No URLs on slides
-- SVG logo embedded
-- Globe icon for visual interest
+12 slides, proper formatting, optimal space usage, professional design.
 
 Usage:
     python generate_pitch_deck.py [--output path/to/output.pdf]
 
 Requirements:
-    pip install reportlab svglib
+    pip install reportlab pillow
 """
 
 import os
@@ -20,137 +16,136 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import LETTER, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, PageBreak,
-    Table, TableStyle, Image
+    Table, TableStyle, Image, KeepTogether
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-from reportlab.graphics import renderPDF
-from reportlab.graphics.shapes import Drawing
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
-# We use pre-converted PNG files for graphics
-HAS_GRAPHICS = True
-
-# Page dimensions - 16:9 widescreen (modern presentation standard)
-PAGE_WIDTH = 13.333 * inch   # 16:9 ratio
-PAGE_HEIGHT = 7.5 * inch     # Fills screens better than LETTER
+# Page dimensions - 16:9 widescreen
+PAGE_WIDTH = 13.333 * inch
+PAGE_HEIGHT = 7.5 * inch
 
 # Colors
 BLACK = colors.black
 WHITE = colors.white
-GRAY = colors.Color(0.4, 0.4, 0.4)
+DARK_BLUE = colors.Color(0.12, 0.31, 0.47)  # Professional blue
+GRAY = colors.Color(0.35, 0.35, 0.35)
 LIGHT_GRAY = colors.Color(0.6, 0.6, 0.6)
+ACCENT_BLUE = colors.Color(0.2, 0.5, 0.8)
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
 ASSETS_DIR = SCRIPT_DIR / "assets"
-LOGO_PATH = ASSETS_DIR / "saga-logo.png"
 LOGO_HORIZONTAL_PATH = ASSETS_DIR / "saga-logo-horizontal.png"
 ICON_PATH = ASSETS_DIR / "saga-icon.png"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 
 
 def get_styles():
-    """Create custom paragraph styles - COMPACT VERSION."""
+    """Create professional paragraph styles optimized for 16:9."""
     styles = getSampleStyleSheet()
 
-    # Title slide - main title
+    # Big title for title slide
     styles.add(ParagraphStyle(
         'BigTitle',
-        parent=styles['Title'],
-        fontSize=52,
-        leading=60,
+        fontSize=48,
+        leading=56,
         textColor=BLACK,
         alignment=TA_CENTER,
-        spaceAfter=12,
         fontName='Helvetica-Bold',
+        spaceAfter=20,
     ))
 
-    # Slide title centered
+    # Slide title - large and bold
     styles.add(ParagraphStyle(
-        'SlideTitleCenter',
-        parent=styles['Heading1'],
-        fontSize=28,
-        leading=34,
+        'SlideTitle',
+        fontSize=36,
+        leading=44,
         textColor=BLACK,
         alignment=TA_CENTER,
-        spaceAfter=16,
         fontName='Helvetica-Bold',
+        spaceAfter=24,
     ))
 
-    # Key message - bold centered
+    # Key message - bold, impactful
     styles.add(ParagraphStyle(
         'KeyMessage',
-        parent=styles['Normal'],
-        fontSize=18,
-        leading=26,
+        fontSize=24,
+        leading=32,
         textColor=BLACK,
         alignment=TA_CENTER,
         fontName='Helvetica-Bold',
-        spaceBefore=8,
+        spaceBefore=16,
+        spaceAfter=16,
+    ))
+
+    # Subheading
+    styles.add(ParagraphStyle(
+        'Subheading',
+        fontSize=18,
+        leading=24,
+        textColor=DARK_BLUE,
+        alignment=TA_LEFT,
+        fontName='Helvetica-Bold',
+        spaceBefore=16,
         spaceAfter=8,
     ))
 
     # Body text - centered
     styles.add(ParagraphStyle(
-        'SlideBodyCenter',
-        parent=styles['Normal'],
-        fontSize=14,
-        leading=20,
-        textColor=BLACK,
+        'BodyCenter',
+        fontSize=18,
+        leading=26,
+        textColor=GRAY,
         alignment=TA_CENTER,
-        spaceAfter=8,
         fontName='Helvetica',
+        spaceAfter=12,
     ))
 
     # Body text - left
     styles.add(ParagraphStyle(
-        'SlideBody',
-        parent=styles['Normal'],
-        fontSize=14,
-        leading=20,
-        textColor=BLACK,
-        alignment=TA_LEFT,
-        spaceAfter=8,
-        fontName='Helvetica',
-    ))
-
-    # Bullet points - compact
-    styles.add(ParagraphStyle(
-        'SlideBullet',
-        parent=styles['Normal'],
-        fontSize=13,
-        leading=18,
-        textColor=BLACK,
-        alignment=TA_LEFT,
-        leftIndent=24,
-        spaceAfter=4,
-        fontName='Helvetica',
-    ))
-
-    # Quote - italic gray
-    styles.add(ParagraphStyle(
-        'Quote',
-        parent=styles['Normal'],
+        'BodyLeft',
         fontSize=16,
         leading=24,
+        textColor=BLACK,
+        alignment=TA_LEFT,
+        fontName='Helvetica',
+        spaceAfter=8,
+    ))
+
+    # Bullet point - with proper indentation and bullet character
+    styles.add(ParagraphStyle(
+        'SlideBullet',
+        fontSize=16,
+        leading=24,
+        textColor=BLACK,
+        alignment=TA_LEFT,
+        leftIndent=30,
+        firstLineIndent=-15,
+        fontName='Helvetica',
+        spaceAfter=8,
+    ))
+
+    # Quote - italic, gray
+    styles.add(ParagraphStyle(
+        'Quote',
+        fontSize=20,
+        leading=28,
         textColor=GRAY,
         alignment=TA_CENTER,
         fontName='Helvetica-Oblique',
-        spaceBefore=8,
-        spaceAfter=8,
+        spaceBefore=12,
+        spaceAfter=12,
     ))
 
-    # Section header (for email, etc)
+    # Contact info
     styles.add(ParagraphStyle(
-        'SectionHeader',
-        parent=styles['Normal'],
-        fontSize=20,
-        leading=26,
+        'Contact',
+        fontSize=24,
+        leading=32,
         textColor=BLACK,
         alignment=TA_CENTER,
         fontName='Helvetica-Bold',
@@ -161,7 +156,7 @@ def get_styles():
 
 
 class PitchDeckGenerator:
-    """Generates the Saga pitch deck PDF - COMPACT, with SVG graphics."""
+    """Generates world-class VC pitch deck - 12 slides, professional formatting."""
 
     def __init__(self, output_path: str = None):
         if output_path is None:
@@ -180,566 +175,514 @@ class PitchDeckGenerator:
         self.elements.append(Spacer(1, height * inch))
 
     def add_title(self, text: str):
-        self.elements.append(Paragraph(text, self.styles['SlideTitleCenter']))
-
-    def add_body(self, text: str, centered: bool = True):
-        style = 'SlideBodyCenter' if centered else 'SlideBody'
-        self.elements.append(Paragraph(text, self.styles[style]))
-
-    def add_bullet(self, text: str):
-        self.elements.append(Paragraph(f"  {text}", self.styles['SlideBullet']))
-
-    def add_quote(self, text: str):
-        self.elements.append(Paragraph(text, self.styles['Quote']))
+        self.elements.append(Paragraph(text, self.styles['SlideTitle']))
 
     def add_key_message(self, text: str):
         self.elements.append(Paragraph(text, self.styles['KeyMessage']))
 
-    def add_image(self, img_path: Path, width: float = 2.0, height: float = None, preserve_aspect: bool = True):
-        """Add a PNG image to the document with proper aspect ratio."""
-        if not HAS_GRAPHICS or not img_path.exists():
-            return
+    def add_subheading(self, text: str):
+        self.elements.append(Paragraph(text, self.styles['Subheading']))
 
-        # Get actual image dimensions for proper aspect ratio
-        from PIL import Image as PILImage
-        with PILImage.open(img_path) as pil_img:
-            img_w, img_h = pil_img.size
-            aspect_ratio = img_w / img_h
+    def add_body(self, text: str, centered: bool = False):
+        style = 'BodyCenter' if centered else 'BodyLeft'
+        self.elements.append(Paragraph(text, self.styles[style]))
 
-        # Calculate height from width if preserving aspect ratio
-        if preserve_aspect and height is None:
-            calculated_height = width / aspect_ratio
-        else:
-            calculated_height = height or width
+    def add_bullet(self, text: str):
+        # Use proper bullet character
+        self.elements.append(Paragraph(f"<bullet>&bull;</bullet> {text}", self.styles['SlideBullet']))
 
-        img = Image(str(img_path), width=width*inch, height=calculated_height*inch)
-        self.elements.append(img)
+    def add_quote(self, text: str):
+        self.elements.append(Paragraph(text, self.styles['Quote']))
 
-    def add_globe_decoration(self, size: float = 1.2):
-        """Add the globe icon as a visual decoration."""
-        self.add_image(ICON_PATH, width=size, height=size)
+    def add_logo(self, width: float = 5.0):
+        """Add horizontal logo centered."""
+        if LOGO_HORIZONTAL_PATH.exists():
+            from PIL import Image as PILImage
+            with PILImage.open(LOGO_HORIZONTAL_PATH) as img:
+                aspect = img.width / img.height
+            height = width / aspect
+            logo = Image(str(LOGO_HORIZONTAL_PATH), width=width*inch, height=height*inch)
+            self.elements.append(logo)
+
+    def add_icon(self, size: float = 1.0):
+        """Add globe icon centered."""
+        if ICON_PATH.exists():
+            icon = Image(str(ICON_PATH), width=size*inch, height=size*inch)
+            self.elements.append(icon)
 
     # =========================================================================
-    # SLIDES - COMPACT VERSION
+    # 12 SLIDES - WORLD-CLASS VC QUALITY
     # =========================================================================
 
     def slide_01_title(self):
-        """Slide 1: Title with horizontal logo (SagaLabs + globe)."""
+        """Slide 1: Title - Clean, professional, memorable."""
         self.add_spacer(1.8)
-
-        # Add horizontal logo - auto aspect ratio from actual image dimensions
-        if HAS_GRAPHICS and LOGO_HORIZONTAL_PATH.exists():
-            self.add_image(LOGO_HORIZONTAL_PATH, width=5.5)
-            self.add_spacer(0.5)
-
+        self.add_logo(width=6.0)
+        self.add_spacer(0.8)
         self.add_key_message("Your Judgment. Amplified Beyond Human Scale.")
-        self.add_spacer(0.4)
+        self.add_spacer(0.5)
         self.add_quote("What happens when human intuition meets infinite reach?")
 
-    def slide_02_the_truth(self):
-        """Slide 2: AI + Human - COMPACT."""
+    def slide_02_problem(self):
+        """Slide 2: The Problem - Emotional hook, clear pain point."""
+        self.add_page_break()
+        self.add_spacer(0.5)
+        self.add_title("The Risks You Can't See")
+        self.add_spacer(0.3)
+
+        self.add_key_message("The risks that hurt you aren't the ones you're watching.")
+
+        self.add_spacer(0.4)
+
+        # Create a visual 3-column layout for the examples
+        examples = [
+            ["A policy shift in Chile", "threatens your lithium exposure"],
+            ["A labor dispute in Finland", "cascades into European paper positions"],
+            ["A drought in Taiwan", "builds toward a semiconductor shock"],
+        ]
+
+        # Use a table for visual impact
+        data = [[Paragraph(f"<b>{e[0]}</b><br/><font color='gray'>{e[1]}</font>",
+                          ParagraphStyle('ex', fontSize=14, leading=20, alignment=TA_CENTER))
+                for e in examples]]
+
+        table = Table(data, colWidths=[3.5*inch, 3.5*inch, 3.5*inch])
+        table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+        ]))
+        self.elements.append(table)
+
+        self.add_spacer(0.5)
+        self.add_body("You're not failing because you're not smart enough.", centered=True)
+        self.add_key_message("No human can watch everything.")
+
+    def slide_03_solution(self):
+        """Slide 3: The Solution - What Saga does."""
         self.add_page_break()
         self.add_spacer(0.4)
-        self.add_title("The Truth About AI + Human")
+        self.add_title("Saga: The Living Intelligence Layer")
         self.add_spacer(0.2)
 
-        self.add_key_message(
-            "AI can't do what you do. You can't do what AI does.<br/>"
-            "Together, you're unstoppable."
-        )
+        self.add_quote("See the whole picture - including what you didn't know to look for.")
 
-        self.add_spacer(0.3)
-
-        self.add_body(
-            "The best investment decisions require human judgment - pattern recognition "
-            "built over decades, intuition honed through experience."
-        )
-
-        self.add_spacer(0.2)
-
-        self.add_body(
-            "But human judgment has a scale ceiling. Too many sources, too many entities, "
-            "too many chains of events cascading simultaneously."
-        )
-
-        self.add_spacer(0.3)
-        self.add_key_message("Saga removes that ceiling.")
-
-        # Add small globe
-        if HAS_GRAPHICS and ICON_PATH.exists():
-            self.add_spacer(0.3)
-            self.add_globe_decoration(size=0.8)
-
-    def slide_03_the_problem(self):
-        """Slide 3: The blind spots - COMPACT."""
-        self.add_page_break()
         self.add_spacer(0.4)
-        self.add_title("The Risks You Don't Know You're Taking")
-        self.add_spacer(0.2)
 
-        self.add_key_message(
-            "The risks that hurt you aren't the ones you're watching.<br/>"
-            "They're the ones you didn't know existed."
-        )
+        # Two-column layout using simple HTML paragraphs
+        col1_text = """<b>Continuous Monitoring</b><br/>
+1,000+ sources analyzed 24/7<br/><br/>
+<b>Entity Mapping</b><br/>
+Millions of relationships traced"""
 
-        self.add_spacer(0.3)
+        col2_text = """<b>Chain Reaction Detection</b><br/>
+Events traced to YOUR positions<br/><br/>
+<b>Living Analysis</b><br/>
+Your thesis tested daily against new info"""
 
-        self.add_bullet("A policy shift in Chile quietly threatens your lithium exposure")
-        self.add_bullet("A labor dispute in Finland cascades into your European paper positions")
-        self.add_bullet("A drought in Taiwan is building toward a semiconductor shock")
+        style = ParagraphStyle('solcol', fontSize=15, leading=22, textColor=BLACK)
+        data = [[Paragraph(col1_text, style), Paragraph(col2_text, style)]]
+        table = Table(data, colWidths=[5.0*inch, 5.5*inch])
+        table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 30),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 20),
+        ]))
+        self.elements.append(table)
 
-        self.add_spacer(0.3)
-        self.add_key_message("You're not failing because you're not smart enough.<br/>No human can watch everything.")
-
-    def slide_04_the_solution(self):
-        """Slide 4: The Living Map - COMPACT."""
-        self.add_page_break()
-        self.add_spacer(0.4)
-        self.add_title("The Living Map")
-        self.add_spacer(0.2)
-
-        self.add_quote("See the whole picture - including the parts you didn't know to look for.")
-
-        self.add_spacer(0.3)
-
-        self.add_bullet("1000+ sources monitored continuously")
-        self.add_bullet("Millions of entity relationships mapped")
-        self.add_bullet("Chain reactions traced to YOUR specific positions")
-        self.add_bullet("24/7 vigilance - nothing building undetected")
-
-        self.add_spacer(0.3)
+        self.add_spacer(0.5)
         self.add_key_message("Not a snapshot. A living system.")
 
-        # Add globe
-        if HAS_GRAPHICS and ICON_PATH.exists():
-            self.add_spacer(0.2)
-            self.add_globe_decoration(size=0.8)
-
-    def slide_05_conviction(self):
-        """Slide 5: Confidence to Conviction - COMPACT."""
+    def slide_04_differentiation(self):
+        """Slide 4: Why We're Different - Category definition."""
         self.add_page_break()
         self.add_spacer(0.4)
-        self.add_title("From Confidence to Conviction")
-        self.add_spacer(0.2)
-
-        self.add_key_message(
-            "Confidence is 'I think I'm right.'<br/>"
-            "Conviction is 'I know I've checked.'"
-        )
-
+        self.add_title("The Category We're Defining")
         self.add_spacer(0.3)
 
-        self.add_body(
-            "There's a gap between good judgment and total certainty. "
-            "It's filled with doubt and the nagging question: What am I missing?"
-        )
-
-        self.add_spacer(0.2)
-
-        self.add_bullet("Walk into meetings without hidden doubt")
-        self.add_bullet("Defend your thesis knowing you've checked what others haven't")
-        self.add_bullet("Sleep better because nothing is building undetected")
+        # Market context
+        self.add_body("Palantir built intelligence infrastructure for governments - <b>$400B+</b>", centered=True)
+        self.add_body("Recorded Future built it for cybersecurity - <b>$2.7B exit</b>", centered=True)
 
         self.add_spacer(0.3)
-        self.add_key_message("Same judgment. Complete conviction.")
+        self.add_key_message("No one has built it for institutional capital.")
 
-    def slide_06_living_analysis(self):
-        """Slide 6: Analysis That Lives - COMPACT."""
-        self.add_page_break()
         self.add_spacer(0.4)
-        self.add_title("Analysis That Doesn't Expire")
-        self.add_spacer(0.2)
 
-        self.add_quote("A great analysis isn't a document. It's a conversation that never stops.")
+        # Comparison table - visual and impactful
+        data = [
+            ['Bloomberg', 'ChatGPT/Perplexity', 'Saga'],
+            ['Data Terminal', 'General AI Chat', 'Intelligence Infrastructure'],
+            ['What happened', 'Answers questions', "What's building toward YOU"],
+            ['$30B revenue', 'Consumer focus', 'Built for capital allocation'],
+        ]
 
-        self.add_spacer(0.3)
+        table = Table(data, colWidths=[3.2*inch, 3.2*inch, 3.6*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), DARK_BLUE),
+            ('BACKGROUND', (2, 0), (2, 0), colors.Color(0.1, 0.4, 0.2)),  # Green for Saga
+            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 13),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.Color(0.85, 0.85, 0.85)),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('BACKGROUND', (2, 1), (2, -1), colors.Color(0.95, 1.0, 0.95)),  # Light green highlight
+        ]))
+        self.elements.append(table)
 
-        self.add_body(
-            "Static reports are dead the moment they're written. "
-            "Saga keeps analyzing - your thesis tested against every new piece of information, every day."
-        )
-
-        self.add_spacer(0.2)
-
-        self.add_bullet("Your thesis, stress-tested daily")
-        self.add_bullet("Risks surfaced as they form, not after they hit")
-        self.add_bullet("Intelligence that evolves with the market")
-
-        self.add_spacer(0.3)
-        self.add_key_message("You shouldn't have to wonder if your analysis is still valid.")
-
-    def slide_07_infrastructure(self):
-        """Slide 7: Not a Wrapper - COMPACT."""
+    def slide_05_how_it_works(self):
+        """Slide 5: How It Works - Technical credibility without complexity."""
         self.add_page_break()
         self.add_spacer(0.4)
         self.add_title("Infrastructure, Not a Wrapper")
         self.add_spacer(0.2)
 
-        self.add_quote("We're not an AI wrapper. We're the infrastructure that lets frontier AI do what it does best.")
+        self.add_quote("We don't compete with LLMs. We unleash them.")
 
         self.add_spacer(0.3)
 
-        self.add_body("For AI to deliver real value, frontier models need:")
-
-        self.add_spacer(0.2)
-        self.add_bullet("Structured problems (not vague queries)")
-        self.add_bullet("Rich context (not just raw data)")
-        self.add_bullet("Time to work iteratively (not one-shot responses)")
-
-        self.add_spacer(0.3)
-        self.add_key_message("Better AI makes us more valuable, not less.")
-
-    def slide_08_category(self):
-        """Slide 8: Category - COMPACT."""
-        self.add_page_break()
-        self.add_spacer(0.4)
-        self.add_title("The Category We're Defining")
-        self.add_spacer(0.2)
-
-        self.add_body("Palantir built intelligence infrastructure for governments - $400B+")
-        self.add_body("Recorded Future built it for cybersecurity - $2.7B exit")
-
-        self.add_spacer(0.2)
-
-        self.add_key_message(
-            "No one has built it for the trillions in institutional capital<br/>"
-            "where human judgment still matters most."
-        )
+        self.add_body("For frontier AI to deliver real value, it needs:", centered=True)
 
         self.add_spacer(0.3)
 
-        # Comparison table
-        data = [
-            ['Bloomberg', 'Perplexity', 'Saga'],
-            ['Data', 'Search', 'Intelligence'],
-            ['What happened', 'Finds info', 'What\'s building toward YOU'],
+        # Three pillars - visual layout
+        pillars = [
+            ["Structured Problems", "Not vague queries - precise,\nwell-formed questions"],
+            ["Rich Context", "Knowledge graph with millions\nof entity relationships"],
+            ["Time to Work", "Iterative analysis, not\none-shot responses"],
         ]
-        table = Table(data, colWidths=[2.2*inch, 2.2*inch, 2.5*inch])
+
+        data = [[Paragraph(f"<b>{p[0]}</b><br/><br/><font size='12' color='gray'>{p[1]}</font>",
+                          ParagraphStyle('pill', fontSize=16, leading=22, alignment=TA_CENTER))
+                for p in pillars]]
+
+        table = Table(data, colWidths=[3.3*inch, 3.4*inch, 3.3*inch])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.1, 0.1, 0.1)),
-            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.Color(0.85, 0.85, 0.85)),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BOX', (0, 0), (0, 0), 1, DARK_BLUE),
+            ('BOX', (1, 0), (1, 0), 1, DARK_BLUE),
+            ('BOX', (2, 0), (2, 0), 1, DARK_BLUE),
+            ('TOPPADDING', (0, 0), (-1, -1), 15),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ]))
         self.elements.append(table)
 
-    def slide_09_moat(self):
-        """Slide 9: The Moat - COMPACT."""
+        self.add_spacer(0.4)
+        self.add_key_message("Better AI makes us more valuable, not less.")
+
+    def slide_06_traction(self):
+        """Slide 6: Traction - Proof points."""
         self.add_page_break()
         self.add_spacer(0.4)
-        self.add_title("The Moat That Deepens Daily")
-        self.add_spacer(0.2)
+        self.add_title("Traction & Proof Points")
+        self.add_spacer(0.3)
 
-        self.add_body("<b>Network Effects:</b>", centered=False)
-        self.add_bullet("Every day of data = Better entity resolution = Smarter patterns")
-        self.add_bullet("More customers = Richer graph = Better warnings")
+        # Two-column layout using simple text bullets
+        left_col = """<b>Working Platform</b><br/>
+&#8226; 4-6 frontier models running 24/7<br/>
+&#8226; Real-time ingestion from 1,000+ sources<br/>
+&#8226; Knowledge graph with millions of entities<br/>
+&#8226; Multi-agent coordination layer<br/><br/>
+<b>Customer Engagement</b><br/>
+&#8226; Active pilots: hedge funds, family offices<br/>
+&#8226; Target customers: $500M+ AUM<br/>
+&#8226; Strong pull - repeat engagement"""
 
-        self.add_spacer(0.2)
+        right_col = """<b>Competitive Moat</b><br/>
+&#8226; Years of entity mapping - not easily replicated<br/>
+&#8226; Proprietary multi-agent architecture<br/>
+&#8226; Network effects: more data = better patterns<br/>
+&#8226; Academic foundation in causal mapping<br/><br/>
+<b>Timing Advantage</b><br/>
+&#8226; First mover in agentic AI for finance<br/>
+&#8226; Building while others are pitching<br/>
+&#8226; Infrastructure moat deepens daily"""
 
-        self.add_body("<b>Infrastructure Advantages:</b>", centered=False)
-        self.add_bullet("Millions of entities mapped - years to build")
-        self.add_bullet("Multi-agent orchestration - proprietary architecture")
-        self.add_bullet("Academic foundation in causal mapping research")
-
-        self.add_spacer(0.2)
-
-        self.add_body("<b>Timing:</b>", centered=False)
-        self.add_bullet("First mover in agentic AI for financial intelligence")
-        self.add_bullet("Building while others are pitching")
-
-        self.add_spacer(0.2)
-        self.add_key_message("Infrastructure-level IP that deepens every day.")
-
-    def slide_10_traction(self):
-        """Slide 10: Traction - COMPACT."""
-        self.add_page_break()
-        self.add_spacer(0.4)
-        self.add_title("Traction")
-        self.add_spacer(0.2)
-
-        self.add_body("<b>Working Platform:</b>", centered=False)
-        self.add_bullet("4-6 frontier models running 24/7")
-        self.add_bullet("Real-time ingestion from 1000+ sources")
-
-        self.add_spacer(0.2)
-
-        self.add_body("<b>Proprietary Infrastructure:</b>", centered=False)
-        self.add_bullet("Graph database with millions of entities")
-        self.add_bullet("Multi-agent coordination layer")
-
-        self.add_spacer(0.2)
-
-        self.add_body("<b>Customer Engagement:</b>", centered=False)
-        self.add_bullet("Active pilots with hedge funds, family offices ($500M+ AUM)")
-        self.add_bullet("Strong pull - repeat engagement")
+        style = ParagraphStyle('col', fontSize=14, leading=22, leftIndent=15)
+        data = [[Paragraph(left_col, style), Paragraph(right_col, style)]]
+        table = Table(data, colWidths=[5.0*inch, 5.5*inch])
+        table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        self.elements.append(table)
 
         self.add_spacer(0.3)
         self.add_key_message("Not a pitch deck company. A working system.")
 
-    def slide_11_team(self):
-        """Slide 11: Team - COMPACT."""
+    def slide_07_team(self):
+        """Slide 7: Team - Credibility."""
         self.add_page_break()
-        self.add_spacer(0.4)
+        self.add_spacer(0.5)
         self.add_title("The Team")
-        self.add_spacer(0.2)
+        self.add_spacer(0.4)
 
-        self.add_key_message("Victor Appelgren - Founder")
+        self.add_key_message("Victor Appelgren - Founder & CEO")
 
-        self.add_spacer(0.2)
+        self.add_spacer(0.4)
 
-        self.add_bullet("Background spanning finance and technology")
-        self.add_bullet("Deep domain expertise in strategic decision-making")
+        # Three columns of expertise
+        expertise = [
+            ["Technical Depth", "Multi-agent AI architectures\nGraph database design\nFrontier model orchestration"],
+            ["Domain Expertise", "Portfolio construction\nRisk management\nInstitutional workflows"],
+            ["Academic Foundation", "Research on LLMs + graphs\nfor market causality mapping"],
+        ]
 
-        self.add_spacer(0.2)
+        data = [[Paragraph(f"<b>{e[0]}</b><br/><br/><font size='13'>{e[1]}</font>",
+                          ParagraphStyle('exp', fontSize=15, leading=22, alignment=TA_CENTER))
+                for e in expertise]]
 
-        self.add_body("<b>Academic Foundation:</b>", centered=False)
-        self.add_bullet("Research on graph databases and LLMs for market causality")
+        table = Table(data, colWidths=[3.3*inch, 3.4*inch, 3.3*inch])
+        table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.97, 0.97, 0.97)),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.Color(0.9, 0.9, 0.9)),
+            ('TOPPADDING', (0, 0), (-1, -1), 20),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+        ]))
+        self.elements.append(table)
 
-        self.add_spacer(0.1)
+        self.add_spacer(0.5)
+        self.add_body("Building with urgency. Hiring key roles with this raise.", centered=True)
 
-        self.add_body("<b>Technical Depth:</b>", centered=False)
-        self.add_bullet("Multi-agent AI architectures, graph database design")
-
-        self.add_spacer(0.1)
-
-        self.add_body("<b>Domain Expertise:</b>", centered=False)
-        self.add_bullet("Portfolio construction, risk management, mandate constraints")
-
-    def slide_12_business_model(self):
-        """Slide 12: Business Model & Unit Economics - IMPROVED."""
+    def slide_08_business_model(self):
+        """Slide 8: Business Model - Clear unit economics."""
         self.add_page_break()
         self.add_spacer(0.2)
         self.add_title("Business Model")
         self.add_spacer(0.15)
 
-        # Pricing section
-        self.add_body("<b>Pricing Model:</b> Team license (scales with organization size)", centered=False)
-        self.add_bullet("Base: ~100,000 SEK/month for teams up to 10 users")
-        self.add_bullet("Enterprise: Custom pricing for larger organizations")
-        self.add_bullet("Annual Contract Value (ACV): 1.2M+ SEK (~$120K+ USD)")
+        # Pricing - inline, more compact
+        self.add_body("<b>Pricing:</b> Team license ~100K SEK/month | ACV: 1.2M+ SEK (~$120K USD)", centered=False)
 
         self.add_spacer(0.2)
 
-        # Unit economics table - expanded with full terms
+        # Unit economics table - compact
         data = [
-            ['Metric', 'Value', 'Explanation'],
-            ['Gross Margin', '~85%', 'After compute (10%) and data (5%) costs'],
-            ['Customer Lifetime Value', '4.3M SEK', '5-year LTV with 10% annual churn'],
-            ['Customer Acquisition Cost', '~100K SEK', 'Founder-led sales, low initially'],
-            ['LTV to CAC Ratio', '43x', 'Exceptional unit economics (target >3x)'],
-            ['Payback Period', '<1 month', 'High ACV covers acquisition cost fast'],
+            ['Metric', 'Value', 'Note'],
+            ['Gross Margin', '~85%', 'After compute (10%) + data (5%)'],
+            ['LTV (5-year)', '4.3M SEK', '10% annual churn assumption'],
+            ['CAC', '~100K SEK', 'Founder-led sales initially'],
+            ['LTV:CAC', '43x', 'Target benchmark: >3x'],
+            ['Payback', '<1 month', 'High ACV covers CAC fast'],
         ]
-        table = Table(data, colWidths=[2.0*inch, 1.2*inch, 3.0*inch])
+
+        table = Table(data, colWidths=[2.0*inch, 1.5*inch, 4.5*inch])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.12, 0.31, 0.47)),
+            ('BACKGROUND', (0, 0), (-1, 0), DARK_BLUE),
             ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('ALIGN', (1, 0), (1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.85, 0.85, 0.85)),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ]))
         self.elements.append(table)
 
-        self.add_spacer(0.2)
-        self.add_key_message("Premium pricing justified by alpha generation and risk reduction.")
+        self.add_spacer(0.25)
+        self.add_key_message("Premium pricing justified by alpha generation.")
 
-    def slide_13_the_ask(self):
-        """Slide 13: The Ask - with specific numbers and clear rationale."""
+    def slide_09_the_ask(self):
+        """Slide 9: The Ask - Clear, specific, justified."""
         self.add_page_break()
         self.add_spacer(0.2)
         self.add_title("The Ask")
         self.add_spacer(0.15)
 
-        # Deal terms
+        # Deal terms - prominent but compact
         data = [
-            ['Term', 'Value'],
             ['Raise Amount', '35M SEK (~$3.3M USD)'],
-            ['Target Dilution', '20%'],
-            ['Pre-Money Valuation', '140M SEK'],
-            ['Post-Money Valuation', '175M SEK'],
+            ['Dilution', '20%'],
+            ['Pre-Money', '140M SEK'],
+            ['Post-Money', '175M SEK'],
         ]
-        table = Table(data, colWidths=[2.5*inch, 2.5*inch])
+
+        table = Table(data, colWidths=[2.5*inch, 3.0*inch])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.12, 0.31, 0.47)),
-            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.97, 0.97, 0.97)),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 14),
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+            ('BOX', (0, 0), (-1, -1), 2, DARK_BLUE),
         ]))
         self.elements.append(table)
 
         self.add_spacer(0.2)
 
-        # Use of funds - simplified
-        self.add_body("<b>Use of Funds:</b>", centered=False)
-        self.add_bullet("65% Team - aggressive hiring to 30 people")
-        self.add_bullet("25% Infrastructure - compute, data acquisition, systems")
-        self.add_bullet("10% Sales, marketing, operations, buffer")
+        # Use of funds - inline table
+        funds_data = [
+            ['65% Team', '25% Infrastructure', '10% Operations'],
+            ['Scale to 30 people', 'Compute, data, systems', 'Sales, marketing, buffer'],
+        ]
+
+        table = Table(funds_data, colWidths=[3.3*inch, 3.3*inch, 3.3*inch])
+        table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('TEXTCOLOR', (0, 0), (-1, 0), DARK_BLUE),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        self.elements.append(table)
 
         self.add_spacer(0.15)
 
-        # Why this amount
-        self.add_body("<b>Why 35M SEK?</b>", centered=False)
-        self.add_bullet("We use 22.5M to reach profitability (Month 21)")
-        self.add_bullet("12.5M buffer = 10+ months runway if sales slow")
-        self.add_bullet("Reach Series A from position of strength, not desperation")
+        # Why 35M - centered and compact
+        self.add_body("<b>Why 35M?</b> 22.5M to profitability + 12.5M buffer (10+ months runway)", centered=True)
+        self.add_spacer(0.1)
+        self.add_key_message("Series A from strength, not desperation.")
 
-    def slide_14_cashflow(self):
-        """Slide 14: 24-Month Cash Flow Projection - ALIGNED WITH EXCEL MODEL."""
+    def slide_10_financials(self):
+        """Slide 10: Financial Projections - Clean, credible."""
         self.add_page_break()
         self.add_spacer(0.2)
-        self.add_title("24-Month Financial Projection")
-        self.add_spacer(0.15)
+        self.add_title("24-Month Projection")
+        self.add_spacer(0.2)
 
-        # Quarterly summary table - ALIGNED WITH EXCEL MODEL
-        # Based on: 90K salary + 32% avgift, first customer M5, higher costs
+        # Quarterly table
         data = [
-            ['', 'Q1', 'Q2', 'Q3', 'Q4', 'Y2 Q1', 'Y2 Q2', 'Y2 Q3', 'Y2 Q4'],
+            ['', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8'],
             ['Customers', '0', '2', '7', '15', '26', '40', '57', '77'],
-            ['Team Size', '6', '9', '12', '15', '21', '26', '29', '30'],
+            ['Team', '6', '9', '12', '15', '21', '26', '29', '30'],
             ['Revenue (M)', '0', '0.3', '1.5', '3.6', '6.6', '10.5', '15.3', '21.0'],
             ['Expenses (M)', '2.8', '4.1', '5.7', '7.5', '10.3', '13.6', '16.2', '18.4'],
             ['Net (M)', '-2.8', '-3.8', '-4.2', '-3.9', '-3.7', '-3.1', '-0.9', '+2.6'],
             ['Cash (M)', '32', '28', '24', '20', '17', '14', '13', '15'],
         ]
-        table = Table(data, colWidths=[1.2*inch, 0.7*inch, 0.7*inch, 0.7*inch, 0.7*inch, 0.8*inch, 0.8*inch, 0.8*inch, 0.8*inch])
+
+        table = Table(data, colWidths=[1.4*inch] + [0.9*inch]*8)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.12, 0.31, 0.47)),
+            ('BACKGROUND', (0, 0), (-1, 0), DARK_BLUE),
+            ('BACKGROUND', (5, 0), (-1, 0), colors.Color(0.08, 0.24, 0.38)),  # Year 2 darker
             ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-            ('BACKGROUND', (0, 1), (0, -1), colors.Color(0.85, 0.89, 0.95)),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            # Highlight Y2 columns
-            ('BACKGROUND', (5, 0), (-1, 0), colors.Color(0.08, 0.24, 0.38)),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.85, 0.85, 0.85)),
+            ('BACKGROUND', (0, 1), (0, -1), colors.Color(0.92, 0.95, 0.98)),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            # Highlight positive net
+            ('TEXTCOLOR', (-1, 5), (-1, 5), colors.Color(0.1, 0.5, 0.1)),
         ]))
         self.elements.append(table)
 
         self.add_spacer(0.25)
 
-        # Key insights - UPDATED TO MATCH MODEL
-        self.add_body("<b>Key Financial Highlights:</b>", centered=False)
-        self.add_bullet("First paying customer Month 5 - product validation before scaling")
-        self.add_bullet("Breakeven Month 21 - capital deployed aggressively for growth")
-        self.add_bullet("12.5M SEK buffer at lowest point - 10+ months runway protection")
+        # Key metrics side by side
+        metrics = [
+            ["Month 5", "First paying customer"],
+            ["Month 21", "Breakeven"],
+            ["Month 24", "92M SEK ARR"],
+            ["Buffer", "12.5M SEK minimum"],
+        ]
 
-        self.add_spacer(0.15)
+        data = [[Paragraph(f"<b>{m[0]}</b><br/><font size='11' color='gray'>{m[1]}</font>",
+                          ParagraphStyle('met', fontSize=14, leading=20, alignment=TA_CENTER))
+                for m in metrics]]
 
-        self.add_body("<b>Series A Position (Month 18-24):</b>", centered=False)
-        self.add_bullet("92M SEK ARR, 85% gross margin, 77 customers")
-        self.add_bullet("Target: 100-150M SEK raise at 8-10x ARR (750M-900M valuation)")
-        self.add_bullet("5x+ return potential for seed investors")
+        table = Table(data, colWidths=[2.5*inch]*4)
+        table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOX', (0, 0), (-1, -1), 1, colors.Color(0.9, 0.9, 0.9)),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.Color(0.9, 0.9, 0.9)),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ]))
+        self.elements.append(table)
 
-        self.add_spacer(0.15)
-        self.add_key_message("High margins + strong growth = premium Series A terms.")
+        self.add_spacer(0.2)
+        self.add_key_message("Series A target: 8-10x ARR = 750M-900M SEK valuation")
 
-    def slide_15_endgame(self):
-        """Slide 15: Endgame - COMPACT."""
+    def slide_11_vision(self):
+        """Slide 11: The Vision - Endgame."""
         self.add_page_break()
-        self.add_spacer(0.4)
+        self.add_spacer(0.2)
         self.add_title("The Endgame")
+        self.add_spacer(0.15)
+
+        self.add_body("<b>Today:</b> Saga helps portfolios see chain reactions before they materialize.", centered=True)
+        self.add_body("<b>Tomorrow:</b> Every investment decision starts with Saga's intelligence layer.", centered=True)
+
         self.add_spacer(0.2)
 
-        self.add_body("<b>Today:</b> Saga helps portfolios see chain reactions before they materialize.")
+        self.add_key_message("Not a tool. Not a dashboard.")
+        self.add_key_message("The nervous system for how capital understands the world.")
+
+        self.add_spacer(0.2)
+
+        # Comparables - inline
+        self.add_body("Bloomberg = data | Palantir = defense | Recorded Future = cyber", centered=True)
         self.add_spacer(0.1)
-        self.add_body("<b>Tomorrow:</b> Every investment decision starts with Saga's intelligence layer.")
+        self.add_quote("Saga = the intelligence layer for capital allocation")
 
-        self.add_spacer(0.3)
-
-        self.add_key_message(
-            "Not a tool. Not a dashboard.<br/>"
-            "The nervous system for how capital understands the world."
-        )
-
-        self.add_spacer(0.3)
-
-        self.add_body("Bloomberg = data layer. Palantir = defense intelligence. Recorded Future = cyber.")
-
-        self.add_spacer(0.2)
-
-        self.add_key_message("Saga = the intelligence layer for capital allocation.")
-
-    def slide_16_contact(self):
-        """Slide 16: Contact - with horizontal logo."""
+    def slide_12_contact(self):
+        """Slide 12: Contact - Clean close."""
         self.add_page_break()
-        self.add_spacer(1.5)
-
-        # Add horizontal logo - auto aspect ratio from actual image dimensions
-        if HAS_GRAPHICS and LOGO_HORIZONTAL_PATH.exists():
-            self.add_image(LOGO_HORIZONTAL_PATH, width=5.5)
-            self.add_spacer(0.5)
-
-        self.add_key_message("Your judgment. Amplified beyond human scale.")
-
+        self.add_spacer(1.2)
+        self.add_logo(width=5.5)
         self.add_spacer(0.5)
-
-        self.add_quote("Interested? Let's talk.")
-
+        self.add_key_message("Your judgment. Amplified beyond human scale.")
+        self.add_spacer(0.4)
+        self.add_quote("Let's talk.")
         self.add_spacer(0.3)
-
-        self.elements.append(Paragraph(
-            "info@saga-labs.com",
-            self.styles['SectionHeader']
-        ))
+        self.elements.append(Paragraph("info@saga-labs.com", self.styles['Contact']))
 
     def generate(self):
         """Generate the full pitch deck PDF."""
         print(f"Generating pitch deck: {self.output_path}")
+        print(f"  Logo: {LOGO_HORIZONTAL_PATH} ({'found' if LOGO_HORIZONTAL_PATH.exists() else 'NOT FOUND'})")
+        print(f"  Icon: {ICON_PATH} ({'found' if ICON_PATH.exists() else 'NOT FOUND'})")
 
-        if HAS_GRAPHICS:
-            print(f"  Logo: {LOGO_PATH} ({'found' if LOGO_PATH.exists() else 'NOT FOUND'})")
-            print(f"  Icon: {ICON_PATH} ({'found' if ICON_PATH.exists() else 'NOT FOUND'})")
-
-        # Build all slides (16 total)
+        # Build all 12 slides
         self.slide_01_title()
-        self.slide_02_the_truth()
-        self.slide_03_the_problem()
-        self.slide_04_the_solution()
-        self.slide_05_conviction()
-        self.slide_06_living_analysis()
-        self.slide_07_infrastructure()
-        self.slide_08_category()
-        self.slide_09_moat()
-        self.slide_10_traction()
-        self.slide_11_team()
-        self.slide_12_business_model()
-        self.slide_13_the_ask()
-        self.slide_14_cashflow()
-        self.slide_15_endgame()
-        self.slide_16_contact()
+        self.slide_02_problem()
+        self.slide_03_solution()
+        self.slide_04_differentiation()
+        self.slide_05_how_it_works()
+        self.slide_06_traction()
+        self.slide_07_team()
+        self.slide_08_business_model()
+        self.slide_09_the_ask()
+        self.slide_10_financials()
+        self.slide_11_vision()
+        self.slide_12_contact()
 
-        # Create PDF with 16:9 widescreen dimensions
+        # Create PDF
         doc = SimpleDocTemplate(
             str(self.output_path),
-            pagesize=(PAGE_WIDTH, PAGE_HEIGHT),  # 16:9 widescreen
-            leftMargin=1.0*inch,
-            rightMargin=1.0*inch,
-            topMargin=0.6*inch,
-            bottomMargin=0.6*inch,
+            pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch,
+            topMargin=0.5*inch,
+            bottomMargin=0.5*inch,
         )
 
         doc.build(self.elements)
-        print(f"Done! PDF: {self.output_path}")
+        print(f"Done! 12-slide pitch deck: {self.output_path}")
         return self.output_path
 
 
