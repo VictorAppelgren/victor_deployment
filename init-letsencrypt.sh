@@ -103,8 +103,8 @@ sleep 2
 # Remove the container to clear any bad state
 docker compose rm -f nginx 2>/dev/null || true
 
-# Start nginx fresh
-docker compose up -d nginx
+# Start nginx fresh - use --no-deps to avoid waiting for unhealthy containers
+docker compose up -d nginx --no-deps
 sleep 3
 
 # Verify nginx is actually running (not restarting)
