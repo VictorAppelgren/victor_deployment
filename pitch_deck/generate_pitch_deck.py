@@ -9,6 +9,10 @@ Usage:
 
 Requirements:
     pip install reportlab pillow
+
+IMPORTANT: Default output is saga-fe/pitch-files/saga_pitch_deck.pdf
+           This directory is PASSWORD PROTECTED via the /pitch route.
+           DO NOT output to static/ or any public directory!
 """
 
 import os
@@ -41,7 +45,11 @@ SCRIPT_DIR = Path(__file__).parent
 ASSETS_DIR = SCRIPT_DIR / "assets"
 LOGO_HORIZONTAL_PATH = ASSETS_DIR / "saga-logo-horizontal.png"
 ICON_PATH = ASSETS_DIR / "saga-icon.png"
-OUTPUT_DIR = SCRIPT_DIR / "output"
+
+# DEFAULT OUTPUT: Password-protected directory (NOT public static/)
+# The pitch-files/ directory is served via /pitch route with password protection
+SAGA_ROOT = SCRIPT_DIR.parent.parent  # Goes from pitch_deck -> victor_deployment -> Saga
+DEFAULT_OUTPUT_DIR = SAGA_ROOT / "saga-fe" / "pitch-files"
 
 
 def get_styles():
@@ -160,9 +168,11 @@ class PitchDeckGenerator:
 
     def __init__(self, output_path: str = None):
         if output_path is None:
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d")
-            output_path = OUTPUT_DIR / f"saga_pitch_deck_{timestamp}.pdf"
+            # Default to password-protected pitch-files directory
+            DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            output_path = DEFAULT_OUTPUT_DIR / "saga_pitch_deck.pdf"
+            print(f"  Output: {output_path} (password-protected)")
+            print(f"  WARNING: Do NOT output to static/ or any public directory!")
 
         self.output_path = Path(output_path)
         self.styles = get_styles()
@@ -380,9 +390,14 @@ Your thesis tested daily against new info"""
     def slide_06_traction(self):
         """Slide 6: Traction - Proof points."""
         self.add_page_break()
-        self.add_spacer(0.4)
-        self.add_title("Traction & Proof Points")
         self.add_spacer(0.3)
+        self.add_title("Traction & Proof Points")
+        self.add_spacer(0.2)
+
+        # Key message up front
+        self.add_key_message("Live product. Test customers. Raising to scale - not to build.")
+
+        self.add_spacer(0.2)
 
         # Two-column layout using simple text bullets
         left_col = """<b>Working Platform</b><br/>
@@ -390,10 +405,11 @@ Your thesis tested daily against new info"""
 &#8226; Real-time ingestion from 1,000+ sources<br/>
 &#8226; Knowledge graph with millions of entities<br/>
 &#8226; Multi-agent coordination layer<br/><br/>
-<b>Customer Engagement</b><br/>
-&#8226; Active pilots: hedge funds, family offices<br/>
-&#8226; Target customers: $500M+ AUM<br/>
-&#8226; Strong pull - repeat engagement"""
+<b>Customer Validation</b><br/>
+&#8226; Test customers actively using platform<br/>
+&#8226; Letters of Intent secured<br/>
+&#8226; Target: hedge funds, family offices,<br/>
+&nbsp;&nbsp;&nbsp;M&A bankers, commodity traders"""
 
         right_col = """<b>Competitive Moat</b><br/>
 &#8226; Years of entity mapping - not easily replicated<br/>
@@ -413,9 +429,6 @@ Your thesis tested daily against new info"""
             ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ]))
         self.elements.append(table)
-
-        self.add_spacer(0.3)
-        self.add_key_message("Not a pitch deck company. A working system.")
 
     def slide_07_team(self):
         """Slide 7: Team - Credibility."""
@@ -500,6 +513,10 @@ Your thesis tested daily against new info"""
         self.add_page_break()
         self.add_spacer(0.2)
         self.add_title("The Ask")
+        self.add_spacer(0.1)
+
+        # Status line - crystal clear
+        self.add_body("<b>Status:</b> Live product with test customers and LOIs. Raising to scale.", centered=True)
         self.add_spacer(0.15)
 
         # Deal terms - prominent but compact
