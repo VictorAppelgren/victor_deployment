@@ -12,6 +12,7 @@ COPY graph-functions /app/graph-functions
 COPY saga-be /app/saga-be
 COPY victor_deployment/start-main.sh /app/victor_deployment/start-main.sh
 COPY victor_deployment/start-top-sources.sh /app/victor_deployment/start-top-sources.sh
+COPY victor_deployment/start-writer.sh /app/victor_deployment/start-writer.sh
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -20,6 +21,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Make start scripts executable
 RUN chmod +x /app/victor_deployment/start-main.sh && \
-    chmod +x /app/victor_deployment/start-top-sources.sh
+    chmod +x /app/victor_deployment/start-top-sources.sh && \
+    chmod +x /app/victor_deployment/start-writer.sh
 
 CMD ["bash", "/app/victor_deployment/start-main.sh"]

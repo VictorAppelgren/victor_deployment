@@ -134,6 +134,39 @@ services:
     networks:
       - network
 
+  # Writer Worker (write_all.py - 24/7 analysis writing with LLM)
+  worker-writer:
+    build:
+      context: ..
+      dockerfile: victor_deployment/Dockerfile.workers
+    container_name: worker-writer
+    working_dir: /app
+    command: ["bash", "/app/victor_deployment/start-writer.sh"]
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=neo4j
+      - BACKEND_API_URL=http://apis:8000
+      - BACKEND_API_KEY=${API_KEY}
+      - PYTHONUNBUFFERED=1
+      - WORKER_NAME=writer
+      - DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - QDRANT_HOST=qdrant
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      # WRITE MODE - this worker writes LLM analysis (unlike ingest workers)
+      - SKIP_ANALYSIS_WRITES=false
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      apis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - network
+
   # Frontend
   frontend:
     build:
