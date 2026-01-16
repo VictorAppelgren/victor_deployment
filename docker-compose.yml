@@ -89,6 +89,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - QDRANT_HOST=qdrant
       - QDRANT_API_KEY=${QDRANT_API_KEY}
+      # INGEST ONLY MODE - skip LLM analysis writing (set to false for write mode)
+      - SKIP_ANALYSIS_WRITES=true
     depends_on:
       neo4j:
         condition: service_healthy
@@ -120,6 +122,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - QDRANT_HOST=qdrant
       - QDRANT_API_KEY=${QDRANT_API_KEY}
+      # INGEST ONLY MODE - skip LLM analysis writing (set to false for write mode)
+      - SKIP_ANALYSIS_WRITES=true
     depends_on:
       neo4j:
         condition: service_healthy
